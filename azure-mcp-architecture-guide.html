@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Azure Container Apps MCP 서버 검증 가이드</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --panel-soft: #f8fafc;
+      --ink: #172033;
+      --muted: #64748b;
+      --line: #d9e2ef;
+      --blue: #2563eb;
+      --blue-soft: #dbeafe;
+      --green: #15803d;
+      --green-soft: #dcfce7;
+      --amber: #b45309;
+      --amber-soft: #fef3c7;
+      --red: #b91c1c;
+      --red-soft: #fee2e2;
+      --shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+      --radius: 8px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.65;
+    }
+
+    a { color: var(--blue); }
+
+    .page {
+      width: min(1180px, calc(100% - 32px));
+      margin: 24px auto 48px;
+    }
+
+    header {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 28px;
+    }
+
+    .eyebrow {
+      color: var(--blue);
+      font-size: 0.82rem;
+      font-weight: 800;
+      letter-spacing: 0;
+      margin: 0 0 8px;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 4vw, 3.1rem);
+      line-height: 1.08;
+      letter-spacing: 0;
+      margin: 0 0 12px;
+    }
+
+    .lead {
+      color: var(--muted);
+      font-size: 1.05rem;
+      max-width: 880px;
+      margin: 0;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 22px;
+    }
+
+    .meta {
+      background: var(--panel-soft);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      min-height: 84px;
+    }
+
+    .meta span {
+      color: var(--muted);
+      display: block;
+      font-size: 0.8rem;
+      margin-bottom: 4px;
+    }
+
+    .meta strong {
+      display: block;
+      font-size: 0.98rem;
+      line-height: 1.35;
+    }
+
+    main {
+      display: grid;
+      gap: 22px;
+      margin-top: 22px;
+    }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 26px;
+    }
+
+    h2 {
+      font-size: clamp(1.35rem, 2vw, 1.8rem);
+      line-height: 1.2;
+      margin: 0 0 16px;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      font-size: 1.08rem;
+      margin: 24px 0 10px;
+      letter-spacing: 0;
+    }
+
+    p { margin: 0 0 14px; }
+    ul, ol { margin: 0 0 14px 22px; padding: 0; }
+    li { margin-bottom: 7px; }
+
+    code {
+      background: #eef2f7;
+      border: 1px solid #e2e8f0;
+      border-radius: 5px;
+      color: #0f172a;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 0.88em;
+      padding: 1px 5px;
+    }
+
+    pre {
+      background: #0f172a;
+      border-radius: var(--radius);
+      color: #e5edf7;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 0.9rem;
+      line-height: 1.55;
+      margin: 14px 0;
+      overflow-x: auto;
+      padding: 16px;
+      white-space: pre;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 14px 0;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #eef4ff;
+      color: #1e3a8a;
+      font-size: 0.9rem;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .callout {
+      border: 1px solid var(--line);
+      border-left: 5px solid var(--blue);
+      border-radius: var(--radius);
+      background: var(--panel-soft);
+      padding: 14px 16px;
+      margin: 14px 0;
+    }
+
+    .callout strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .callout.ok {
+      background: var(--green-soft);
+      border-color: #bbf7d0;
+      border-left-color: var(--green);
+    }
+
+    .callout.warn {
+      background: var(--amber-soft);
+      border-color: #fde68a;
+      border-left-color: var(--amber);
+    }
+
+    .status {
+      border-radius: 999px;
+      display: inline-block;
+      font-size: 0.8rem;
+      font-weight: 800;
+      padding: 3px 9px;
+      white-space: nowrap;
+    }
+
+    .status.ok { background: var(--green-soft); color: var(--green); }
+    .status.warn { background: var(--amber-soft); color: var(--amber); }
+    .status.fail { background: var(--red-soft); color: var(--red); }
+
+    .card {
+      background: var(--panel-soft);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+
+    .card h3 { margin-top: 8px; }
+
+    .architecture {
+      background: linear-gradient(180deg, #f8fafc 0%, #eef4ff 100%);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 1fr auto 1.1fr auto 1fr;
+      align-items: stretch;
+      padding: 16px;
+      margin: 18px 0;
+    }
+
+    .lane {
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px;
+    }
+
+    .lane-title {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 800;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+    }
+
+    .node {
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 7px;
+      padding: 10px;
+      margin-bottom: 8px;
+      min-height: 54px;
+    }
+
+    .node strong {
+      display: block;
+      margin-bottom: 3px;
+    }
+
+    .node span {
+      color: var(--muted);
+      display: block;
+      font-size: 0.88rem;
+      line-height: 1.4;
+    }
+
+    .arrow {
+      align-self: center;
+      color: var(--blue);
+      font-weight: 900;
+      padding: 0 2px;
+    }
+
+    .reference-image { margin: 18px 0 0; }
+
+    .reference-image img {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      display: block;
+      max-width: 100%;
+      height: auto;
+      background: #000;
+    }
+
+    .reference-image figcaption {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-top: 8px;
+    }
+
+    .toc {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 18px;
+    }
+
+    .toc a {
+      background: #eef4ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 999px;
+      color: #1d4ed8;
+      font-size: 0.9rem;
+      font-weight: 700;
+      padding: 6px 11px;
+      text-decoration: none;
+    }
+
+    footer {
+      color: var(--muted);
+      font-size: 0.9rem;
+      padding: 24px 4px 0;
+      text-align: center;
+    }
+
+    @media (max-width: 900px) {
+      .meta-grid, .grid-2, .grid-3, .architecture { grid-template-columns: 1fr; }
+      .arrow { text-align: center; transform: rotate(90deg); }
+      section, header { padding: 20px; }
+      table { display: block; overflow-x: auto; }
+      th, td { min-width: 180px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <p class="eyebrow">Repository Validation Guide</p>
+      <h1>Azure Container Apps MCP 서버 검증 및 구현 가이드</h1>
+      <p class="lead">
+        이 문서는 <code>output/260618_joins_architecture/azure-m365-mcp</code> 프로젝트의 실제 코드와 Bicep을 기준으로
+        무엇이 구현되어 있고, 무엇이 아직 운영 수준 보강이 필요한지 검증한 결과입니다.
+      </p>
+      <div class="meta-grid">
+        <div class="meta"><span>현재 런타임</span><strong>Azure Container Apps</strong></div>
+        <div class="meta"><span>MCP 서버</span><strong>Node.js / TypeScript, Streamable HTTP</strong></div>
+        <div class="meta"><span>테스트 도구</span><strong><code>test_hanik</code> -&gt; <code>test hanik mcp ok</code></strong></div>
+        <div class="meta"><span>검증일</span><strong>2026-06-22</strong></div>
+      </div>
+      <nav class="toc" aria-label="문서 섹션">
+        <a href="#verdict">검증 결론</a>
+        <a href="#architecture">구현 아키텍처</a>
+        <a href="#mcp-spec">MCP 스펙</a>
+        <a href="#deploy">배포 런북</a>
+        <a href="#hardening">운영 보강</a>
+        <a href="#appendix">부록</a>
+        <a href="#resources">리소스 설명</a>
+        <a href="#gateway">게이트웨이</a>
+      </nav>
+    </header>
+
+    <main>
+      <section id="verdict">
+        <h2>1. 검증 결론</h2>
+        <div class="grid-3">
+          <div class="card">
+            <span class="status ok">확인 완료</span>
+            <h3>MCP 앱 동작</h3>
+            <p><code>app/src/index.ts</code>는 <code>POST /mcp</code>에서 Streamable HTTP MCP 요청을 받고, <code>test_hanik</code> 도구가 고정 응답을 반환합니다.</p>
+          </div>
+          <div class="card">
+            <span class="status ok">수정 완료</span>
+            <h3>Bicep 컴파일</h3>
+            <p><code>targetScope = 'subscription'</code>에서 잘못 쓰였던 <code>resourceGroup().id</code> 기반 이름 생성을 수정했고, Bicep 빌드 오류가 사라졌습니다.</p>
+          </div>
+          <div class="card">
+            <span class="status ok">배포 완료</span>
+            <h3>실제 Azure 배포</h3>
+            <p><code>lgup-rg</code>에 전체 리소스를 배포하고, 공개 엔드포인트에서 <code>test hanik mcp ok</code> 응답을 검증했습니다.</p>
+          </div>
+        </div>
+
+        <h3>요구사항 충족 매트릭스</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>요구사항</th>
+              <th>현재 상태</th>
+              <th>판정 근거</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>MCP가 간단히 <code>test hanik mcp ok</code> 반환</td>
+              <td><span class="status ok">충족</span></td>
+              <td><code>test_hanik</code> 도구가 입력 없이 고정 텍스트를 반환하며, 로컬과 배포 엔드포인트 양쪽 <code>tools/call</code>로 검증했습니다.</td>
+            </tr>
+            <tr>
+              <td>Bicep으로 <code>lgup-rg</code>와 하위 리소스 배포</td>
+              <td><span class="status ok">충족</span></td>
+              <td><code>main.bicep</code>는 구독 스코프에서 <code>lgup-rg</code>를 만들고 모듈을 해당 리소스 그룹에 배포합니다.</td>
+            </tr>
+            <tr>
+              <td>비공개 ACR 이미지 운영</td>
+              <td><span class="status ok">충족</span></td>
+              <td>ACR + <code>AcrPull</code> 역할 + Container Apps registry 설정을 추가했고, 관리 ID로 이미지 pull이 동작합니다.</td>
+            </tr>
+            <tr>
+              <td>M365 Copilot Studio에서 원격 MCP 호출</td>
+              <td><span class="status warn">서버 준비 완료</span></td>
+              <td>외부 Ingress와 <code>POST /mcp</code>가 인터넷에서 정상 응답합니다. 최종 등록은 Copilot Studio 테넌트 UI에서 수행합니다.</td>
+            </tr>
+            <tr>
+              <td>Azure Key Vault 기반 인증키 관리</td>
+              <td><span class="status warn">부분 구현</span></td>
+              <td>Key Vault 생성 + 관리 ID에 <code>Key Vault Secrets User</code> 부여까지 완료. 앱 코드의 런타임 시크릿 조회는 다음 단계입니다.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout warn">
+          <strong>가장 중요한 정정</strong>
+          이 프로젝트는 Azure VM 프로젝트가 아닙니다. 현재 제공되는 실제 구현은 <strong>Azure Container Apps + Node.js MCP 서버</strong>입니다.
+          VM 관련 내용은 이 문서 하단의 대안 부록으로만 남겼습니다.
+        </div>
+      </section>
+
+      <section id="architecture">
+        <h2>2. 실제 구현 아키텍처</h2>
+        <p>
+          현재 저장소는 컨테이너화된 MCP 서버를 Azure Container Apps에 올리는 구조입니다. Key Vault, Storage, Managed Identity,
+          Log Analytics, Application Insights는 Bicep으로 생성되며, 관리 ID가 ACR pull과 Key Vault 접근을 담당합니다.
+        </p>
+
+        <div class="architecture" role="img" aria-label="Copilot Studio, Container Apps MCP server, and Azure foundation architecture">
+          <div class="lane">
+            <div class="lane-title">Client / Host</div>
+            <div class="node"><strong>M365 Copilot Studio</strong><span>MCP host 또는 agent tool 소비자</span></div>
+            <div class="node"><strong>MCP Client</strong><span>JSON-RPC 요청 생성, <code>POST /mcp</code></span></div>
+          </div>
+          <div class="arrow">-&gt;</div>
+          <div class="lane">
+            <div class="lane-title">Runtime</div>
+            <div class="node"><strong>API Management (Consumption)</strong><span>구독키 게이트웨이, <code>/mcp</code> 프록시</span></div>
+            <div class="node"><strong>Azure Container Apps</strong><span>외부 Ingress, target port 8080</span></div>
+            <div class="node"><strong>hanik-mcp-server</strong><span><code>test_hanik</code> tool, <code>/health</code>, <code>/mcp</code></span></div>
+          </div>
+          <div class="arrow">-&gt;</div>
+          <div class="lane">
+            <div class="lane-title">Foundation</div>
+            <div class="node"><strong>Key Vault</strong><span>생성됨. 런타임 시크릿 읽기는 보강 필요</span></div>
+            <div class="node"><strong>Storage Account</strong><span>incoming/result/artifact 컨테이너</span></div>
+            <div class="node"><strong>Observability</strong><span>Log Analytics + Application Insights</span></div>
+          </div>
+        </div>
+
+        <h3>구성 파일 기준</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>파일</th>
+              <th>실제 역할</th>
+              <th>검증 메모</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>main.bicep</code></td>
+              <td>구독 스코프 배포, <code>lgup-rg</code> 생성, 모듈 조합</td>
+              <td>컴파일 오류 수정 완료. 배포 명령은 <code>az deployment sub create</code>가 맞습니다.</td>
+            </tr>
+            <tr>
+              <td><code>modules/application.bicep</code></td>
+              <td>Container Apps Environment와 Container App 생성</td>
+              <td>Ingress는 외부 공개, <code>transport: 'auto'</code>, registry는 관리 ID로 pull.</td>
+            </tr>
+            <tr>
+              <td><code>modules/platform-foundation.bicep</code></td>
+              <td>Managed Identity, Key Vault, Storage 생성 + Key Vault Secrets User RBAC</td>
+              <td>관리 ID에 Key Vault 접근 역할 부여 완료.</td>
+            </tr>
+            <tr>
+              <td><code>modules/registry.bicep</code></td>
+              <td>ACR 생성 + 관리 ID에 <code>AcrPull</code> 역할 부여</td>
+              <td>비공개 이미지 pull을 위한 신규 모듈.</td>
+            </tr>
+            <tr>
+              <td><code>app/src/index.ts</code></td>
+              <td>Express + MCP SDK 기반 Streamable HTTP 서버</td>
+              <td><code>POST /mcp</code>와 <code>GET /health</code> 구현. 인증 미들웨어 없음.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <figure class="reference-image">
+          <img src="image.png" alt="초기 업무 스케치: M365, Azure MCP/API, Key Vault 및 외부 시스템 연동 구조">
+          <figcaption>초기 스케치입니다. 현재 구현은 이 스케치의 Azure 실행부를 VM이 아닌 Container Apps로 단순화한 형태입니다.</figcaption>
+        </figure>
+      </section>
+
+      <section id="mcp-spec">
+        <h2>3. MCP 요청 스펙: 이 프로젝트에서 맞는 형태</h2>
+        <div class="callout ok">
+          <strong>공식 MCP Streamable HTTP 기준</strong>
+          클라이언트는 단일 MCP endpoint에 JSON-RPC 메시지를 HTTP POST로 보냅니다. 이 프로젝트의 MCP endpoint는 <code>/mcp</code> 하나입니다.
+          REST형 하위 경로는 만들지 않고, method 값을 <code>initialize</code>, <code>tools/list</code>, <code>tools/call</code>로 보냅니다.
+        </div>
+
+        <h3>헬스 체크</h3>
+        <pre>GET /health
+
+Response:
+{
+  "status": "ok",
+  "server": "hanik-mcp-server",
+  "version": "1.0.0"
+}</pre>
+
+        <h3>Initialize</h3>
+        <pre>POST /mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2025-06-18",
+    "capabilities": {},
+    "clientInfo": {
+      "name": "copilot-studio-or-test-client",
+      "version": "1.0.0"
+    }
+  }
+}</pre>
+
+        <h3>Tools list</h3>
+        <pre>POST /mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/list"
+}</pre>
+
+        <h3>Tool call</h3>
+        <pre>POST /mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "tools/call",
+  "params": {
+    "name": "test_hanik",
+    "arguments": {}
+  }
+}
+
+Expected content text:
+"test hanik mcp ok"</pre>
+
+        <h3>현재 서버의 의도된 제약</h3>
+        <table>
+          <thead>
+            <tr><th>항목</th><th>현재 동작</th><th>의미</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>GET /mcp</code></td>
+              <td>405 Method Not Allowed</td>
+              <td>서버 주도 SSE 스트림을 제공하지 않는 stateless 테스트 서버입니다.</td>
+            </tr>
+            <tr>
+              <td><code>DELETE /mcp</code></td>
+              <td>405 Method Not Allowed</td>
+              <td>서버가 세션 ID를 발급하지 않으므로 세션 종료도 제공하지 않습니다.</td>
+            </tr>
+            <tr>
+              <td>인증</td>
+              <td>없음</td>
+              <td>연결성 확인용입니다. 운영 노출 전에는 OAuth/Entra 보호를 추가해야 합니다.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="deploy">
+        <h2>4. 배포 런북</h2>
+        <h3>4-1. 로컬 검증</h3>
+        <pre>cd output/260618_joins_architecture/azure-m365-mcp/app
+npm install
+npm run build
+PORT=8080 npm start</pre>
+        <pre>curl -s http://localhost:8080/health
+
+curl -s -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test_hanik","arguments":{}}}'</pre>
+
+        <h3>4-2. 이미지 준비 (ACR 클라우드 빌드)</h3>
+        <pre># 1차 배포로 ACR 등 인프라 생성 후, 그 ACR에 이미지 빌드/푸시
+az acr build --registry &lt;acrName&gt; --image hanik-mcp-server:1.0.0 ./app
+
+export CONTAINER_IMAGE="&lt;acrName&gt;.azurecr.io/hanik-mcp-server:1.0.0"</pre>
+
+        <h3>4-3. 구독 스코프 Bicep 배포</h3>
+        <pre>az login
+az account set --subscription "&lt;SUBSCRIPTION_ID&gt;"
+
+az deployment sub create \
+  --name lgup-mcp-dev \
+  --location koreacentral \
+  --template-file main.bicep \
+  --parameters main.dev.bicepparam \
+  --parameters containerImage="$CONTAINER_IMAGE"
+
+APP_URL=$(az deployment sub show \
+  --name lgup-mcp-dev \
+  --query "properties.outputs.containerAppUrl.value" \
+  -o tsv)
+
+echo "$APP_URL"</pre>
+
+        <h3>4-4. 배포 후 검증</h3>
+        <pre>curl -s "$APP_URL/health"
+
+curl -s -X POST "$APP_URL/mcp" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test_hanik","arguments":{}}}'</pre>
+
+        <div class="callout ok">
+          <strong>실제 배포 결과 (2026-06-22)</strong>
+          엔드포인트 <code>https://lgmcp-dev-mcp-api.gentledune-e80525cb.koreacentral.azurecontainerapps.io/mcp</code>에서
+          <code>tools/call test_hanik</code> 호출 시 <code>test hanik mcp ok</code> 응답을 확인했습니다.
+        </div>
+      </section>
+
+      <section id="hardening">
+        <h2>5. 운영 수준 보강 항목</h2>
+        <p>
+          ACR pull과 Key Vault RBAC는 적용 완료했습니다. 남은 항목은 인증과 Key Vault 런타임 조회, Origin 검증입니다.
+        </p>
+
+        <div class="grid-2">
+          <div class="card">
+            <span class="status ok">완료</span>
+            <h3>비공개 ACR Pull</h3>
+            <p>Container Apps가 user-assigned identity로 ACR 이미지를 pull하도록 registry 설정과 <code>AcrPull</code> 역할을 추가했습니다.</p>
+          </div>
+          <div class="card">
+            <span class="status fail">필수</span>
+            <h3>인증 보호</h3>
+            <p>테스트 서버는 무인증입니다. 운영에서는 Entra ID/OAuth 2.1 기반 Bearer token 검증과 audience validation을 추가합니다.</p>
+          </div>
+          <div class="card">
+            <span class="status warn">권장</span>
+            <h3>Key Vault 런타임 조회</h3>
+            <p>관리 ID에 <code>Key Vault Secrets User</code> 부여까지 완료. 앱이 Key Vault를 읽거나 Container Apps secret reference를 쓰도록 마무리합니다.</p>
+          </div>
+          <div class="card">
+            <span class="status warn">권장</span>
+            <h3>Origin / CORS 정책</h3>
+            <p>MCP Streamable HTTP 서버는 Origin 검증을 구현하는 것이 권장됩니다. 공개 노출 시 DNS rebinding 방어가 필요합니다.</p>
+          </div>
+        </div>
+
+        <h3>운영 인증 방향</h3>
+        <table>
+          <thead>
+            <tr><th>환경</th><th>권장 방식</th><th>비고</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>연결성 테스트</td>
+              <td>무인증 또는 제한된 네트워크</td>
+              <td>현재 서버 상태. 공개 인터넷 장기 노출은 피합니다.</td>
+            </tr>
+            <tr>
+              <td>파일럿</td>
+              <td>APIM 또는 Container Apps 앞단 인증</td>
+              <td>토큰 검증, rate limit, 로그 감사를 중앙화합니다.</td>
+            </tr>
+            <tr>
+              <td>운영</td>
+              <td>Entra ID/OAuth + MCP protected resource metadata</td>
+              <td>Bearer token은 매 HTTP 요청에서 검증하고, 토큰 audience는 MCP 서버로 제한합니다.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="copilot">
+        <h2>6. Copilot Studio 연결 시 확인할 점</h2>
+        <div class="callout warn">
+          <strong>문서 정확성 메모</strong>
+          Copilot Studio의 MCP 연결 UI와 지원 범위는 테넌트, 라이선스, 릴리스 상태에 따라 달라질 수 있습니다.
+          이 문서는 MCP 서버 쪽 준비 사항을 기준으로 하며, 최종 등록 절차는 Microsoft Learn의 최신 Copilot Studio MCP 문서를 확인해야 합니다.
+        </div>
+        <ol>
+          <li>서버 URL은 <code>https://&lt;container-app-fqdn&gt;/mcp</code> 한 개입니다.</li>
+          <li>전송 방식은 Streamable HTTP입니다. 클라이언트는 <code>Accept: application/json, text/event-stream</code>을 보낼 수 있어야 합니다.</li>
+          <li>도구 목록에서 <code>test_hanik</code>가 보여야 합니다.</li>
+          <li>도구 호출 결과의 텍스트가 <code>test hanik mcp ok</code>이면 서버 연결은 성공입니다.</li>
+          <li>운영 전에는 무인증 서버를 그대로 노출하지 말고 Entra ID/OAuth 또는 APIM 보호를 추가합니다.</li>
+        </ol>
+      </section>
+
+      <section id="appendix">
+        <h2>7. 부록: VM으로 전환해야 하는 경우</h2>
+        <p>
+          현재 프로젝트는 Container Apps가 기준입니다. VM이 정책상 필요하면 <code>modules/application.bicep</code>를
+          <code>Microsoft.Compute/virtualMachines</code>, NSG, Public IP 또는 Load Balancer, systemd 서비스 구성으로 교체해야 합니다.
+          이 경우에도 MCP endpoint는 동일하게 <code>POST /mcp</code>를 유지하는 것이 좋습니다.
+        </p>
+        <table>
+          <thead>
+            <tr><th>선택지</th><th>장점</th><th>주의점</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Container Apps</td>
+              <td>패치 부담 적음, Ingress/스케일 쉬움, 현재 저장소와 일치</td>
+              <td>비공개 ACR/인증 설정은 명시적으로 보강 필요</td>
+            </tr>
+            <tr>
+              <td>Azure VM</td>
+              <td>네트워크/런타임 제어가 가장 큼</td>
+              <td>OS 패치, TLS, systemd, 로그/백업/NSG를 직접 운영해야 함</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="resources">
+        <h2>8. 리소스 그룹(lgup-rg) 리소스별 용도·설명·목표</h2>
+        <p>
+          아래는 실제 배포된 리소스 그룹 <code>lgup-rg</code>(koreacentral)에 생성된 리소스 각각의 역할입니다.
+          이름은 접두사 <code>lgmcp</code> + 환경 <code>dev</code> 규칙을 따르며, 일부는 전역 고유 접미사가 붙습니다.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>리소스</th>
+              <th>리소스 종류</th>
+              <th>용도 / 설명</th>
+              <th>목표</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>lgmcp-dev-apim-…</code></td>
+              <td>API Management (Consumption)</td>
+              <td>Container App 앞단 게이트웨이. 구독키(<code>Ocp-Apim-Subscription-Key</code>) 없으면 401로 차단하고, 있으면 <code>/mcp</code>로 프록시.</td>
+              <td>거버넌스·인증·rate limit을 적용한 단일 앞단 제공</td>
+            </tr>
+            <tr>
+              <td><code>lgmcp-dev-mcp-api</code></td>
+              <td>Container App</td>
+              <td>MCP 서버(<code>hanik-mcp-server</code>) 컨테이너를 실행. 외부 HTTPS Ingress로 <code>/mcp</code>와 <code>/health</code>를 노출하고 <code>test_hanik</code> 도구를 제공.</td>
+              <td>Copilot Studio가 호출할 MCP 엔드포인트 제공</td>
+            </tr>
+            <tr>
+              <td><code>lgmcp-dev-cae</code></td>
+              <td>Container Apps Environment</td>
+              <td>컨테이너 앱의 실행 경계(네트워크·로그·스케일 단위). Log Analytics와 연결되어 로그를 전송.</td>
+              <td>서버리스 컨테이너 실행 환경 제공</td>
+            </tr>
+            <tr>
+              <td><code>lgmcpdevacr…</code></td>
+              <td>Container Registry (ACR)</td>
+              <td>MCP 컨테이너 이미지(<code>hanik-mcp-server:1.0.0</code>)를 저장. 관리 ID의 <code>AcrPull</code> 권한으로 비공개 pull.</td>
+              <td>신뢰된 비공개 이미지 배포 원본 확보</td>
+            </tr>
+            <tr>
+              <td><code>lgmcp-dev-uami</code></td>
+              <td>User Assigned Managed Identity</td>
+              <td>암호 없는 인증 주체. ACR(<code>AcrPull</code>)과 Key Vault(<code>Key Vault Secrets User</code>) 권한을 보유.</td>
+              <td>시크릿리스(자격증명 비저장) 보안 접근</td>
+            </tr>
+            <tr>
+              <td><code>lgmcpdevkv…</code></td>
+              <td>Key Vault</td>
+              <td>API 키·연결 문자열 등 민감정보를 RBAC 인증으로 보관.</td>
+              <td>인증키/시크릿의 중앙 보관과 접근 통제</td>
+            </tr>
+            <tr>
+              <td><code>lgmcpdevst…</code></td>
+              <td>Storage Account</td>
+              <td>blob 컨테이너 <code>incoming-nonhwp</code>, <code>result-hwp</code>, <code>processing-artifacts</code>를 제공.</td>
+              <td>입력·결과·중간 산출물 파일 저장소</td>
+            </tr>
+            <tr>
+              <td><code>lgmcp-dev-law</code></td>
+              <td>Log Analytics Workspace</td>
+              <td>컨테이너 앱과 플랫폼 로그를 수집·쿼리하는 백엔드.</td>
+              <td>중앙 로그 관측성 확보</td>
+            </tr>
+            <tr>
+              <td><code>lgmcp-dev-appi</code></td>
+              <td>Application Insights</td>
+              <td>앱 요청·성능·예외를 추적하는 APM. Log Analytics 기반으로 동작.</td>
+              <td>애플리케이션 모니터링/진단</td>
+            </tr>
+            <tr>
+              <td>Smart Detection / smart-detector alert</td>
+              <td>자동 생성(모니터 알림 규칙)</td>
+              <td>Application Insights·Storage 생성 시 Azure가 자동 추가하는 이상 감지 규칙.</td>
+              <td>이상 징후 자동 감지(기본 제공)</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout">
+          <strong>리소스 간 의존 관계 요약</strong>
+          Container App은 ACR에서 이미지를 pull(<code>AcrPull</code>)하고, 필요 시 Key Vault에서 시크릿을 읽으며(<code>Key Vault Secrets User</code>),
+          로그는 Log Analytics로, 애플리케이션 텔레메트리는 Application Insights로 흐릅니다. 이 모든 인증은 User Assigned Managed Identity로 처리되어
+          코드나 설정에 자격증명을 저장하지 않습니다.
+        </div>
+      </section>
+
+      <section id="gateway">
+        <h2>9. API Management 게이트웨이 (앞단 보호)</h2>
+        <p>
+          거버넌스와 보안을 위해 Container App 앞에 <strong>Azure API Management(Consumption)</strong> 게이트웨이를 두었습니다.
+          외부에서는 게이트웨이 URL로만 접근하며, 구독키가 없으면 401로 차단됩니다. 실제 배포에서 키 없음=401, 키 있음=정상 응답을 검증했습니다.
+        </p>
+        <table>
+          <thead><tr><th>항목</th><th>값 / 동작</th></tr></thead>
+          <tbody>
+            <tr><td>게이트웨이 MCP URL</td><td><code>https://&lt;apim&gt;.azure-api.net/mcp</code></td></tr>
+            <tr><td>인증</td><td>구독키 헤더 <code>Ocp-Apim-Subscription-Key</code> 필수</td></tr>
+            <tr><td>키 없음</td><td>HTTP 401 (차단)</td></tr>
+            <tr><td>키 있음</td><td>Container App으로 프록시 후 <code>test hanik mcp ok</code> 반환</td></tr>
+            <tr><td>SSE 처리</td><td><code>buffer-response="false"</code> 정책으로 Streamable HTTP 응답 통과</td></tr>
+          </tbody>
+        </table>
+        <h3>구독키 조회</h3>
+        <pre>az rest --method post \
+  --url "https://management.azure.com/subscriptions/&lt;SUB&gt;/resourceGroups/lgup-rg/providers/Microsoft.ApiManagement/service/&lt;apimName&gt;/subscriptions/mcp-subscription/listSecrets?api-version=2022-08-01" \
+  --query primaryKey -o tsv</pre>
+        <h3>게이트웨이를 통한 호출</h3>
+        <pre>curl -s -X POST "https://&lt;apim&gt;.azure-api.net/mcp" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Ocp-Apim-Subscription-Key: &lt;KEY&gt;" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test_hanik","arguments":{}}}'</pre>
+        <div class="callout warn">
+          <strong>완전 사설(private) 네트워킹 업그레이드 경로</strong>
+          현재 게이트웨이는 공개 엔드포인트 + 구독키 방식입니다. 완전한 VNet private이 필요하면 APIM을 Standard v2/Premium으로 올려
+          VNet 통합하고 Container App을 internal ingress로 전환해야 합니다(비용·프로비저닝 시간 증가).
+        </div>
+        <div class="callout">
+          <strong>Copilot Studio / DLP 참고</strong>
+          게이트웨이를 써도 Power Platform DLP는 새 호스트(<code>*.azure-api.net</code>)를 커스텀 커넥터로 봅니다.
+          DLP 정책에서 해당 호스트를 Business/Non-Business 그룹으로 허용해야 연결이 통과됩니다.
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>Last updated: 2026-06-23. 검증 기준: 실제 저장소 파일, 배포된 Azure 리소스, MCP 공식 Streamable HTTP/Authorization 스펙, Azure Bicep 빌드 결과.</p>
+    </footer>
+  </div>
+</body>
+</html>

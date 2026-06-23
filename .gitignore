@@ -1,0 +1,8 @@
+# Ignore root-level compiled ARM output (e.g. main.json), keep bicep config and app sources
+/*.json
+!/bicepconfig.json
+!*.bicepparam
+
+# Node
+node_modules/
+dist/

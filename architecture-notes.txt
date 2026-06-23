@@ -1,0 +1,25 @@
+Implementation notes
+====================
+
+Scope of this scaffold
+- Start with Azure Container Apps for the MCP/API runtime.
+- Model enterprise systems (APIM, NGIS, PSS, Tiro, Confluence, DRM) as external integrations first.
+- Keep M365 values and external endpoint URLs as parameters to avoid hardcoding tenant specifics.
+
+Recommended next modules
+- modules/networking.bicep
+- modules/apim.bicep
+- modules/keyvault-rbac.bicep
+- modules/private-dns.bicep
+- modules/alerts.bicep
+
+Security hardening next
+- Enable private endpoints for Storage/Key Vault.
+- Restrict Container Apps ingress with APIM or Front Door in front.
+- Use Key Vault references or deployment-time secret injection instead of placeholder params.
+- Add RBAC for workload and operator personas.
+
+GitHub SDLC alignment
+- Build image in GitHub Actions.
+- Use environment approvals for prod deployment.
+- Gate Bicep changes with build/what-if and policy checks.
