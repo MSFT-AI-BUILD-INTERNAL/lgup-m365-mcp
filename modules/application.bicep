@@ -25,6 +25,12 @@ param containerCpu int
 param containerMemory string
 param tags object
 
+@description('Entra ID application (client) ID used for Container Apps built-in authentication. Empty disables auth.')
+param authClientId string = ''
+
+@description('Entra ID tenant ID used as the token issuer for built-in authentication.')
+param authTenantId string = ''
+
 @description('Login server of the container registry the workload identity pulls from. Empty for public images.')
 param containerRegistryServer string = ''
 
@@ -182,3 +188,35 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
 output containerAppName string = containerApp.name
 output containerAppUrl string = 'https://${containerApp.properties.configuration.ingress.fqdn}'
 output managedEnvironmentId string = managedEnvironment.id
+
+// Built-in authentication (Easy Auth) with Entra ID.
+// AllowAnonymous keeps the endpoint reachable while forwarding the caller's
+// identity (x-ms-client-principal* headers) to the backend whenever a valid
+// bearer token is presented. Only created when an auth client ID is supplied.
+resource authConfig 'Microsoft.App/containerApps/authConfigs@2024-03-01' = if (!empty(authClientId)) {
+  parent: containerApp
+  name: 'current'
+  properties: {
+    platform: {
+      enabled: true
+    }
+    globalValidation: {
+      unauthenticatedClientAction: 'AllowAnonymous'
+    }
+    identityProviders: {
+      azureActiveDirectory: {
+        enabled: true
+        registration: {
+          openIdIssuer: 'https://login.microsoftonline.com/${authTenantId}/v2.0'
+          clientId: authClientId
+        }
+        validation: {
+          allowedAudiences: [
+            'api://${authClientId}'
+            authClientId
+          ]
+        }
+      }
+    }
+  }
+}

@@ -77,6 +77,9 @@ param apimPublisherEmail string = 'admin@example.com'
 @description('Publisher organization name for the API Management gateway.')
 param apimPublisherName string = 'LGUP MCP'
 
+@description('Entra ID application (client) ID used for Container Apps built-in authentication. Empty disables auth.')
+param authClientId string = ''
+
 // Create the resource group
 resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   name: resourceGroupName
@@ -160,6 +163,8 @@ module application './modules/application.bicep' = {
     maxReplicas: maxReplicas
     containerCpu: containerCpu
     containerMemory: containerMemory
+    authClientId: authClientId
+    authTenantId: subscription().tenantId
     tags: tags
   }
 }

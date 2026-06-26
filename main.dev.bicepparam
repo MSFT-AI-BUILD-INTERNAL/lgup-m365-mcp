@@ -27,7 +27,7 @@ param integrations = {
   drmApiBaseUrl: 'https://drm.example.com'
 }
 
-param containerImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+param containerImage = 'lgmcpdevacreubidyfnm7le4.azurecr.io/hanik-mcp-server:1.1.0'
 param containerPort = 8080
 param minReplicas = 1
 param maxReplicas = 2
@@ -40,3 +40,5 @@ param drmApiKey = 'replace-me'
 
 param apimPublisherEmail = 'admin@example.com'
 param apimPublisherName = 'LGUP MCP'
+
+param authClientId = '92ad2fc4-e344-423f-b312-849420011273'
