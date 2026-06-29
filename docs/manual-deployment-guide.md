@@ -1,6 +1,6 @@
 # Bicep 미사용 시 수동 배포 가이드 (Azure CLI / 포털)
 
-이 문서는 **Bicep(IaC)을 사용할 수 없는 환경**에서 `lgup-m365-mcp` 인프라를
+이 문서는 **Bicep(IaC)을 사용할 수 없는 환경**에서 이 인프라를
 **Azure CLI 명령형(imperative) 명령** 또는 **Azure 포털**로 동일하게 구축하는 방법을 설명합니다.
 
 > 기준 아키텍처는 [main.bicep](../main.bicep)와 동일합니다. 리소스 종류·역할·관계는
@@ -22,6 +22,9 @@
 ---
 
 ## 1. 변수 준비
+
+> `main.dev.bicepparam`는 샘플 파일로 유지하고, 실제 시크릿이 들어가는 값은 추적되지 않는 로컬 `.bicepparam` 파일 또는 셸 환경변수로 관리하세요.
+
 
 모든 명령에서 재사용할 변수를 셸에 정의합니다. (Bicep 명명 규칙과 동일한 결과를 내도록 구성)
 
@@ -51,7 +54,7 @@ ACR="${PREFIX}${ENV}acr${HASH}"
 APIM="${PREFIX}-${ENV}-apim-${HASH}"
 
 # --- 시크릿 (환경변수로 주입, 히스토리 주의) ---
-export M365_CLIENT_SECRET='...'
+export CLIENT_APPLICATION_SECRET='...'
 export NGIS_API_KEY='...'
 export DRM_API_KEY='...'
 ```
@@ -79,7 +82,7 @@ done
 
 ```bash
 az group create --name "$RG" --location "$LOCATION" \
-  --tags workload=m365-mcp environment="$ENV"
+  --tags workload=copilot-studio-mcp environment="$ENV"
 ```
 
 **포털**: 홈 > 리소스 그룹 > 만들기 > 이름/지역 입력.
@@ -273,7 +276,7 @@ az containerapp create \
 az containerapp secret set \
   --name "$APP" --resource-group "$RG" \
   --secrets \
-    m365-client-secret="$M365_CLIENT_SECRET" \
+    client-application-secret="$CLIENT_APPLICATION_SECRET" \
     ngis-api-key="$NGIS_API_KEY" \
     drm-api-key="$DRM_API_KEY"
 ```
@@ -286,11 +289,8 @@ az containerapp update \
   --set-env-vars \
     APPLICATIONINSIGHTS_CONNECTION_STRING="$APPI_CONN" \
     AZURE_CLIENT_ID="$UAMI_CLIENTID" \
-    M365_TENANT_ID="<tenantId>" \
-    M365_SHAREPOINT_SITE_URL="<sharePointSiteUrl>" \
-    M365_ONEDRIVE_ROOT_PATH="<oneDriveRootPath>" \
-    M365_TEAMS_TENANT_DOMAIN="<teamsTenantDomain>" \
-    M365_COPILOT_STUDIO_ENVIRONMENT="<copilotStudioEnvironment>" \
+    COPILOT_TENANT_ID="<tenantId>" \
+    COPILOT_STUDIO_ENVIRONMENT="<copilotStudioEnvironment>" \
     APIM_GATEWAY_URL="<apimGatewayUrl>" \
     NGIS_BASE_URL="<ngisBaseUrl>" \
     PSS_BASE_URL="<pssBaseUrl>" \
@@ -299,7 +299,7 @@ az containerapp update \
     DRM_API_BASE_URL="<drmApiBaseUrl>" \
     KEY_VAULT_URI="$KV_URI" \
     STORAGE_ACCOUNT_NAME="$ST" \
-    M365_CLIENT_SECRET=secretref:m365-client-secret \
+    CLIENT_APPLICATION_SECRET=secretref:client-application-secret \
     NGIS_API_KEY=secretref:ngis-api-key \
     DRM_API_KEY=secretref:drm-api-key
 
@@ -338,11 +338,11 @@ az apim api create \
   --resource-group "$RG" \
   --service-name "$APIM" \
   --api-id mcp \
-  --display-name "Hanik MCP" \
+  --display-name "Copilot Studio MCP Integration" \
   --path "" \
   --protocols https \
   --service-url "$APP_URL" \
-  --subscription-required true
+  --subscription-required false
 ```
 
 ### 8.3 Operation 추가 (`POST /mcp`, `GET /health`)
@@ -361,7 +361,7 @@ az apim api operation create \
 
 ### 8.4 정책: 응답 버퍼링 비활성화 (MCP Streamable HTTP/SSE)
 
-CLI로 API 정책을 직접 설정하기 번거로우면 **포털 > API Management > APIs > Hanik MCP > All operations > Policies**에서 아래 XML을 붙여넣습니다.
+CLI로 API 정책을 직접 설정하기 번거로우면 **포털 > API Management > APIs > Copilot Studio MCP Integration > All operations > Policies**에서 아래 XML을 붙여넣습니다.
 
 ```xml
 <policies>
@@ -374,15 +374,23 @@ CLI로 API 정책을 직접 설정하기 번거로우면 **포털 > API Manageme
 
 > REST/CLI로 설정하려면 `az rest`로 `Microsoft.ApiManagement/service/apis/policies` 리소스를 PUT 하면 됩니다.
 
-### 8.5 구독(Subscription) 생성 및 키 조회
+### 8.5 `/mcp`에 Entra OAuth2/JWT 검증 추가
+
+APIM이 `/mcp` 호출의 Bearer 토큰을 검증하도록 설정합니다.
 
 ```bash
-# 포털: API Management > Subscriptions > 추가 (scope = mcp API)
-# 키 조회:
-az apim subscription list \
-  --resource-group "$RG" --service-name "$APIM" \
-  --query "[].{name:name, displayName:displayName}" -o table
+AUTH_CLIENT_ID="<entra-app-client-id>"
+TENANT_ID=$(az account show --query tenantId -o tsv)
+
+az apim api operation policy update \
+  --resource-group "$RG" \
+  --service-name "$APIM" \
+  --api-id mcp \
+  --operation-id post-mcp \
+  --xml-content "<policies><inbound><validate-jwt header-name=\"Authorization\" require-scheme=\"Bearer\" failed-validation-httpcode=\"401\" failed-validation-error-message=\"Unauthorized. Valid Entra bearer token required.\"><openid-config url=\"https://login.microsoftonline.com/${TENANT_ID}/v2.0/.well-known/openid-configuration\" /><audiences><audience>api://${AUTH_CLIENT_ID}</audience><audience>${AUTH_CLIENT_ID}</audience></audiences></validate-jwt><base /></inbound><backend><base /></backend><outbound><base /></outbound><on-error><base /></on-error></policies>"
 ```
+
+> 이 설정은 `/mcp`에만 적용됩니다. `/health`는 JWT 검증 없이 유지됩니다.
 
 ---
 
@@ -392,9 +400,9 @@ az apim subscription list \
 # Container App 직접 헬스 체크
 curl -s "$APP_URL/health"
 
-# APIM 경유 (구독 키 헤더 필요)
+# APIM 경유 (Entra Bearer 토큰 필요)
 curl -s -X POST "${GATEWAY_URL}/mcp" \
-  -H "Ocp-Apim-Subscription-Key: <SUBSCRIPTION_KEY>" \
+  -H "Authorization: Bearer <ENTRA_ACCESS_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```

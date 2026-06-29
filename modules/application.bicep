@@ -9,10 +9,10 @@ param managedIdentityId string
 param managedIdentityClientId string
 param keyVaultUri string
 param storageAccountName string
-param m365 object
+param copilotStudio object
 param integrations object
 @secure()
-param m365ClientSecret string
+param clientApplicationSecret string
 @secure()
 param ngisApiKey string
 @secure()
@@ -25,8 +25,8 @@ param containerCpu int
 param containerMemory string
 param tags object
 
-@description('Entra ID application (client) ID used for Container Apps built-in authentication. Empty disables auth.')
-param authClientId string = ''
+@description('Entra ID application (client) ID used for Container Apps built-in authentication.')
+param authClientId string
 
 @description('Entra ID tenant ID used as the token issuer for built-in authentication.')
 param authTenantId string = ''
@@ -79,8 +79,8 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
       ]
       secrets: [
         {
-          name: 'm365-client-secret'
-          value: m365ClientSecret
+          name: 'client-application-secret'
+          value: clientApplicationSecret
         }
         {
           name: 'ngis-api-key'
@@ -107,24 +107,12 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
               value: managedIdentityClientId
             }
             {
-              name: 'M365_TENANT_ID'
-              value: m365.tenantId
+              name: 'COPILOT_TENANT_ID'
+              value: copilotStudio.tenantId
             }
             {
-              name: 'M365_SHAREPOINT_SITE_URL'
-              value: m365.sharePointSiteUrl
-            }
-            {
-              name: 'M365_ONEDRIVE_ROOT_PATH'
-              value: m365.oneDriveRootPath
-            }
-            {
-              name: 'M365_TEAMS_TENANT_DOMAIN'
-              value: m365.teamsTenantDomain
-            }
-            {
-              name: 'M365_COPILOT_STUDIO_ENVIRONMENT'
-              value: m365.copilotStudioEnvironment
+              name: 'COPILOT_STUDIO_ENVIRONMENT'
+              value: copilotStudio.copilotStudioEnvironment
             }
             {
               name: 'APIM_GATEWAY_URL'
@@ -159,8 +147,8 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
               value: storageAccountName
             }
             {
-              name: 'M365_CLIENT_SECRET'
-              secretRef: 'm365-client-secret'
+              name: 'CLIENT_APPLICATION_SECRET'
+              secretRef: 'client-application-secret'
             }
             {
               name: 'NGIS_API_KEY'
@@ -192,8 +180,8 @@ output managedEnvironmentId string = managedEnvironment.id
 // Built-in authentication (Easy Auth) with Entra ID.
 // AllowAnonymous keeps the endpoint reachable while forwarding the caller's
 // identity (x-ms-client-principal* headers) to the backend whenever a valid
-// bearer token is presented. Only created when an auth client ID is supplied.
-resource authConfig 'Microsoft.App/containerApps/authConfigs@2024-03-01' = if (!empty(authClientId)) {
+// bearer token is presented.
+resource authConfig 'Microsoft.App/containerApps/authConfigs@2024-03-01' = {
   parent: containerApp
   name: 'current'
   properties: {

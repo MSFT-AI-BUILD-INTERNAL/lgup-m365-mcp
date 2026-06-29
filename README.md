@@ -1,6 +1,6 @@
-# Azure M365 MCP scaffold
+# Azure Copilot Studio MCP scaffold
 
-This folder is the starter scaffold for implementing the M365 + Azure MCP/API architecture.
+This repository provides a starter scaffold for deploying an Azure-hosted MCP/API service that will be consumed by an M365 Copilot Studio Agent and a Client Application.
 
 ## What is included
 
@@ -8,18 +8,20 @@ This folder is the starter scaffold for implementing the M365 + Azure MCP/API ar
 - `modules/observability.bicep`: Log Analytics + Application Insights
 - `modules/platform-foundation.bicep`: User-assigned identity, Key Vault, Storage Account, baseline containers
 - `modules/application.bicep`: Azure Container Apps environment + MCP/API app shell
-- `main.dev.bicepparam`: sample development parameters
+- `modules/gateway.bicep`: API Management gateway in front of the MCP endpoint
+- `main.dev.bicepparam`: checked-in sample development parameters (no real secrets)
 
 ## Intended runtime shape
 
-- M365 side: Copilot Studio, SharePoint, OneDrive, Outlook/Teams
+- Client side: M365 Copilot Studio Agent and Client Application
 - Azure side: MCP/API app, storage for incoming/result artifacts, Key Vault for secrets, managed identity, observability
 - Enterprise integrations: APIM, NGIS, PSS, Tiro, Confluence, DRM API
+- Gateway auth: Entra bearer token validation at APIM for `/mcp` (no APIM subscription key)
 
 ## What this scaffold does not implement yet
 
-- Actual MCP server application code
-- APIM instance and policies
+- Full MCP business logic beyond the starter server
+- APIM production policies and advanced gateway hardening
 - Private networking / VNets / private endpoints
 - Real RBAC assignments for operators and workload identity
 - Secrets bootstrap automation
@@ -27,10 +29,10 @@ This folder is the starter scaffold for implementing the M365 + Azure MCP/API ar
 
 ## First implementation steps
 
-1. Replace placeholder values in `main.dev.bicepparam`.
+1. Keep `main.dev.bicepparam` as a sample, use placeholders only, and inject real secrets at deployment time or from an untracked local `.bicepparam` file.
 2. Replace `containerImage` with your actual application image.
-3. Add APIM resources or reference an existing APIM instance.
-4. Add Key Vault secret seeding and RBAC.
+3. Wire the MCP endpoint into your Copilot Studio Agent and Client Application flows.
+4. Add Key Vault secret seeding and RBAC hardening.
 5. Add GitHub Actions deployment workflow using this Bicep stack.
 
 ## Example deployment
@@ -39,5 +41,5 @@ This folder is the starter scaffold for implementing the M365 + Azure MCP/API ar
 az deployment sub create \
   --location <location> \
   --template-file main.bicep \
-  --parameters main.dev.bicepparam
+  --parameters main.local.bicepparam
 ```

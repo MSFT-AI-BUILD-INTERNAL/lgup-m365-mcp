@@ -4,7 +4,7 @@ Implementation notes
 Scope of this scaffold
 - Start with Azure Container Apps for the MCP/API runtime.
 - Model enterprise systems (APIM, NGIS, PSS, Tiro, Confluence, DRM) as external integrations first.
-- Keep M365 values and external endpoint URLs as parameters to avoid hardcoding tenant specifics.
+- Keep Copilot Studio Agent/client application values and external endpoint URLs as parameters to avoid hardcoding tenant specifics.
 
 Recommended next modules
 - modules/networking.bicep

@@ -451,7 +451,7 @@
           <div class="arrow">-&gt;</div>
           <div class="lane">
             <div class="lane-title">Runtime</div>
-            <div class="node"><strong>API Management (Consumption)</strong><span>구독키 게이트웨이, <code>/mcp</code> 프록시</span></div>
+            <div class="node"><strong>API Management (Consumption)</strong><span>Entra Bearer 토큰 게이트웨이, <code>/mcp</code> 프록시</span></div>
             <div class="node"><strong>Azure Container Apps</strong><span>외부 Ingress, target port 8080</span></div>
             <div class="node"><strong>hanik-mcp-server</strong><span><code>test_hanik</code> tool, <code>/health</code>, <code>/mcp</code></span></div>
           </div>
@@ -627,7 +627,7 @@ az deployment sub create \
   --name lgup-mcp-dev \
   --location koreacentral \
   --template-file main.bicep \
-  --parameters main.dev.bicepparam \
+  --parameters main.local.bicepparam \
   --parameters containerImage="$CONTAINER_IMAGE"
 
 APP_URL=$(az deployment sub show \
@@ -767,7 +767,7 @@ curl -s -X POST "$APP_URL/mcp" \
             <tr>
               <td><code>lgmcp-dev-apim-…</code></td>
               <td>API Management (Consumption)</td>
-              <td>Container App 앞단 게이트웨이. 구독키(<code>Ocp-Apim-Subscription-Key</code>) 없으면 401로 차단하고, 있으면 <code>/mcp</code>로 프록시.</td>
+              <td>Container App 앞단 게이트웨이. Entra Bearer 토큰을 검증한 뒤 <code>/mcp</code>로 프록시.</td>
               <td>거버넌스·인증·rate limit을 적용한 단일 앞단 제공</td>
             </tr>
             <tr>
@@ -839,31 +839,29 @@ curl -s -X POST "$APP_URL/mcp" \
         <h2>9. API Management 게이트웨이 (앞단 보호)</h2>
         <p>
           거버넌스와 보안을 위해 Container App 앞에 <strong>Azure API Management(Consumption)</strong> 게이트웨이를 두었습니다.
-          외부에서는 게이트웨이 URL로만 접근하며, 구독키가 없으면 401로 차단됩니다. 실제 배포에서 키 없음=401, 키 있음=정상 응답을 검증했습니다.
+          외부에서는 게이트웨이 URL로만 접근하며, Entra Bearer 토큰이 없거나 유효하지 않으면 401로 차단됩니다.
         </p>
         <table>
           <thead><tr><th>항목</th><th>값 / 동작</th></tr></thead>
           <tbody>
             <tr><td>게이트웨이 MCP URL</td><td><code>https://&lt;apim&gt;.azure-api.net/mcp</code></td></tr>
-            <tr><td>인증</td><td>구독키 헤더 <code>Ocp-Apim-Subscription-Key</code> 필수</td></tr>
-            <tr><td>키 없음</td><td>HTTP 401 (차단)</td></tr>
-            <tr><td>키 있음</td><td>Container App으로 프록시 후 <code>test hanik mcp ok</code> 반환</td></tr>
+            <tr><td>인증</td><td>Entra Bearer 토큰 필수</td></tr>
+            <tr><td>토큰 없음/오류</td><td>HTTP 401 (차단)</td></tr>
+            <tr><td>유효한 토큰</td><td>Container App으로 프록시 후 <code>test hanik mcp ok</code> 반환</td></tr>
             <tr><td>SSE 처리</td><td><code>buffer-response="false"</code> 정책으로 Streamable HTTP 응답 통과</td></tr>
           </tbody>
         </table>
-        <h3>구독키 조회</h3>
-        <pre>az rest --method post \
-  --url "https://management.azure.com/subscriptions/&lt;SUB&gt;/resourceGroups/lgup-rg/providers/Microsoft.ApiManagement/service/&lt;apimName&gt;/subscriptions/mcp-subscription/listSecrets?api-version=2022-08-01" \
-  --query primaryKey -o tsv</pre>
+        <h3>Entra access token 준비</h3>
+        <p>클라이언트는 대상 API의 <code>authClientId</code>를 audience로 갖는 Entra access token을 발급받아 <code>Authorization: Bearer &lt;token&gt;</code> 헤더로 전달합니다.</p>
         <h3>게이트웨이를 통한 호출</h3>
         <pre>curl -s -X POST "https://&lt;apim&gt;.azure-api.net/mcp" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -H "Ocp-Apim-Subscription-Key: &lt;KEY&gt;" \
+  -H "Authorization: Bearer &lt;ENTRA_ACCESS_TOKEN&gt;" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test_hanik","arguments":{}}}'</pre>
         <div class="callout warn">
           <strong>완전 사설(private) 네트워킹 업그레이드 경로</strong>
-          현재 게이트웨이는 공개 엔드포인트 + 구독키 방식입니다. 완전한 VNet private이 필요하면 APIM을 Standard v2/Premium으로 올려
+          현재 게이트웨이는 공개 엔드포인트 + Entra Bearer 토큰 방식입니다. 완전한 VNet private이 필요하면 APIM을 Standard v2/Premium으로 올려
           VNet 통합하고 Container App을 internal ingress로 전환해야 합니다(비용·프로비저닝 시간 증가).
         </div>
         <div class="callout">

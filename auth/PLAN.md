@@ -345,7 +345,7 @@ Copilot Studio 관리 포털에서:
 | 4 | Client Secret | A-1에서 생성한 secret 값 |
 | 5 | Tenant ID | 조직 Directory (Tenant) ID |
 | 6 | Scope | `api://<mcp-server-client-id>/access_as_user` |
-| 7 | Token Exchange URL (SSO) | `api://<copilot-studio-app-id>` (Teams SSO 시) |
+| 7 | Token Exchange URL (SSO) | `api://<copilot-studio-app-id>` (SSO 사용 시) |
 
 #### A-3. Copilot Studio에서 MCP 커넥터 등록
 
@@ -360,7 +360,7 @@ Copilot Studio 관리 포털에서:
 
 ```
 [사용자] → [Copilot Studio 채팅]
-    ↓ (1) 사용자 인증 (Teams SSO 또는 명시적 로그인)
+    ↓ (1) 사용자 인증 (Entra SSO 또는 명시적 로그인)
 [Copilot Studio] → [Entra ID token endpoint]
     ↓ (2) Authorization Code → access_token 획득
          scope: api://<mcp-server-client-id>/access_as_user
@@ -497,7 +497,7 @@ Accept: application/json, text/event-stream
 | Redirect URI | Bot Framework URL | msauth:// 스킴 | 해당 없음 |
 | 토큰 획득 주체 | Copilot Studio 런타임 | 모바일 앱 (MSAL) | 토큰 미발급 (검증만) |
 | 토큰 전달 방식 | Bearer 헤더 (자동) | Bearer 헤더 (개발자 구현) | 동일하게 수신 |
-| 사용자 개입 | Teams SSO / 1회 동의 | 앱 내 로그인 화면 | 해당 없음 |
+| 사용자 개입 | Entra SSO / 1회 동의 | 앱 내 로그인 화면 | 해당 없음 |
 | 토큰 갱신 | Copilot 자동 처리 | MSAL silent refresh | 관여 안 함 |
 | CORS 필요 | 아니오 (서버→서버) | 아니오 (네이티브 앱) | CORS 미설정 |
 | Auth 서버 추가 엔드포인트 | 없음 | 없음 | `/mcp` + `/health` 만 |

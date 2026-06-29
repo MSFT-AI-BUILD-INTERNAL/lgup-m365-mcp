@@ -14,15 +14,12 @@ param resourceGroupName string = 'lgup-rg'
 
 @description('Tags applied to all supported resources.')
 param tags object = {
-  workload: 'm365-mcp'
+  workload: 'copilot-studio-mcp'
   environment: environmentName
 }
 
-type M365Config = {
+type CopilotStudioConfig = {
   tenantId: string
-  sharePointSiteUrl: string
-  oneDriveRootPath: string
-  teamsTenantDomain: string
   copilotStudioEnvironment: string
 }
 
@@ -35,8 +32,8 @@ type IntegrationEndpoints = {
   drmApiBaseUrl: string
 }
 
-@description('M365-side integration values used by the MCP/API workload.')
-param m365 M365Config
+@description('Copilot Studio Agent and client application values used by the MCP/API workload.')
+param copilotStudio CopilotStudioConfig
 
 @description('Enterprise endpoint base URLs that the Azure-hosted MCP/API integrates with.')
 param integrations IntegrationEndpoints
@@ -60,8 +57,8 @@ param containerCpu int = 1
 param containerMemory string = '2Gi'
 
 @secure()
-@description('Client secret used to access M365-side integrations.')
-param m365ClientSecret string
+@description('Client application secret used for downstream authenticated integrations.')
+param clientApplicationSecret string
 
 @secure()
 @description('API key for NGIS integration.')
@@ -77,8 +74,8 @@ param apimPublisherEmail string = 'admin@example.com'
 @description('Publisher organization name for the API Management gateway.')
 param apimPublisherName string = 'LGUP MCP'
 
-@description('Entra ID application (client) ID used for Container Apps built-in authentication. Empty disables auth.')
-param authClientId string = ''
+@description('Entra ID application (client) ID used for APIM JWT validation and Container Apps built-in authentication.')
+param authClientId string
 
 // Create the resource group
 resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
@@ -152,9 +149,9 @@ module application './modules/application.bicep' = {
     keyVaultUri: foundation.outputs.keyVaultUri
     storageAccountName: foundation.outputs.storageAccountName
     containerRegistryServer: registry.outputs.loginServer
-    m365: m365
+    copilotStudio: copilotStudio
     integrations: integrations
-    m365ClientSecret: m365ClientSecret
+    clientApplicationSecret: clientApplicationSecret
     ngisApiKey: ngisApiKey
     drmApiKey: drmApiKey
     containerImage: containerImage
@@ -177,6 +174,8 @@ module gateway './modules/gateway.bicep' = {
     publisherEmail: apimPublisherEmail
     publisherName: apimPublisherName
     containerAppUrl: application.outputs.containerAppUrl
+    authClientId: authClientId
+    authTenantId: subscription().tenantId
     tags: tags
   }
 }

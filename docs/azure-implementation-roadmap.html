@@ -184,7 +184,7 @@
         Phase 0~3의 실행 항목과 결정 필요 사항을 정의합니다.
       </p>
       <div class="meta-row">
-        <span class="chip">기준 다이어그램: M365 ↔ Azure ↔ 상암 DC</span>
+        <span class="chip">기준 다이어그램: Client applications ↔ Azure ↔ 상암 DC</span>
         <span class="chip">기준 코드: main.bicep · app/src/index.ts</span>
         <span class="chip">작성일 2026-06-28</span>
       </div>
@@ -214,7 +214,7 @@
           <p>
             인프라 뼈대(Container Apps · ACR · Key Vault · Storage · APIM · 관측성 · Easy Auth)는
             <strong>약 70% 완성</strong>되어 있으나, 다이어그램이 요구하는 <strong>실제 업무 기능</strong>
-            (DRM 복호화 파이프라인, OneDrive 파일 왕복, 상암 DC 슬기 API 연동, 온프레미스 네트워킹)은
+            (DRM 복호화 파이프라인, 클라이언트 파일 전달, 상암 DC 슬기 API 연동, 온프레미스 네트워킹)은
             <strong>거의 미구현(0%)</strong> 상태입니다.
           </p>
           <div class="legend">
@@ -228,7 +228,7 @@
               <tr><td>MCP/API 진입점</td><td><span class="badge b-part">부분</span></td><td>복호화 요청 툴/엔드포인트 없음, MCP vs REST 미결</td></tr>
               <tr><td>DRM 호출(복호화)</td><td><span class="badge b-todo">없음</span></td><td>DRM 클라이언트 코드·스펙 없음</td></tr>
               <tr><td>인증/키 관리</td><td><span class="badge b-part">부분</span></td><td>Key Vault 런타임 조회·OBO 흐름 없음</td></tr>
-              <tr><td>OneDrive 파일 반환</td><td><span class="badge b-todo">없음</span></td><td>Microsoft Graph 연동 없음</td></tr>
+              <tr><td>클라이언트 파일 반환</td><td><span class="badge b-todo">없음</span></td><td>클라이언트 파일 전달 연동 없음</td></tr>
               <tr><td>상암 DC / 슬기 API</td><td><span class="badge b-todo">없음</span></td><td>온프레미스 연결·클라이언트 전무</td></tr>
             </tbody>
           </table>
@@ -239,13 +239,13 @@
           <p>다이어그램의 Azure 영역과 데이터 흐름을 시퀀스로 표현하면 다음과 같습니다.</p>
           <div class="mermaid">
 flowchart LR
-  U([사용자]) -->|"① Non-HWP 업로드 / DRM 복호화 요청"| CS[Copilot Studio]
+  U([사용자]) -->|"① Non-HWP 업로드 / DRM 복호화 요청"| CS[Copilot Studio Agent]
   CS -->|"② MCP / API 호출"| MCP{{"Azure: MCP/API 진입점"}}
   U -.->|"DRM 복호화 요청(직접)"| MCP
   MCP -->|"③ DRM 호출"| DRM[DRM 복호화]
   MCP -->|"인증/키 조회"| KV[(인증/키 관리<br/>Key Vault)]
   DRM -->|"④ 복호화된 HWP"| MCP
-  MCP -->|"⑤ 복호화된 HWP 반환"| OD[OneDrive 개인]
+  MCP -->|"⑤ 복호화된 HWP 반환"| CA[Client Application]
   MCP ==>|"⑥ MCP / API 호출"| SADC[[상암 데이터센터망]]
   SADC ==> SG[슬기 API / MCP]
           </div>
@@ -315,7 +315,7 @@ flowchart LR
               <tr><td>0-1</td><td>진입점 방식 결정 (MCP vs REST vs 둘 다)</td><td>인터페이스 결정서</td><td>—</td></tr>
               <tr><td>0-2</td><td>DRM API 인터페이스 스펙 확보(인증·포맷·파일전달·동기성)</td><td>DRM 연동 규격서</td><td>DRM 팀</td></tr>
               <tr><td>0-3</td><td>슬기 API/MCP 인터페이스 스펙 확보</td><td>슬기 연동 규격서</td><td>슬기/상암 팀</td></tr>
-              <tr><td>0-4</td><td>데이터 흐름·권한 모델 확정(OneDrive ↔ Blob ↔ DRM ↔ 슬기)</td><td>데이터 플로우 다이어그램</td><td>0-1~0-3</td></tr>
+              <tr><td>0-4</td><td>데이터 흐름·권한 모델 확정(Client Application ↔ Blob ↔ DRM ↔ 슬기)</td><td>데이터 플로우 다이어그램</td><td>0-1~0-3</td></tr>
               <tr><td>0-5</td><td>온프레미스 연결 방식 결정(ExpressRoute vs VPN)</td><td>네트워크 설계 결정서</td><td>네트워크 팀</td></tr>
             </tbody>
           </table>
@@ -332,7 +332,7 @@ flowchart LR
             <tbody>
               <tr><td>1-1</td><td><code>decrypt_file</code> 복호화 MCP 툴/REST 엔드포인트 추가</td><td><code>app/src/index.ts</code></td><td>0-1</td></tr>
               <tr><td>1-2</td><td>DRM 호출 클라이언트 구현(Key Vault에서 키 조회)</td><td>app</td><td>0-2, 1-5</td></tr>
-              <tr><td>1-3</td><td>Microsoft Graph 연동: OneDrive 다운로드/업로드(복호화 HWP 반환)</td><td>app</td><td>0-4</td></tr>
+              <tr><td>1-3</td><td>Client Application 파일 전달 연동(복호화 HWP 반환)</td><td>app</td><td>0-4</td></tr>
               <tr><td>1-4</td><td>Blob 스테이징 파이프라인(<code>incoming → processing → result</code>)</td><td>app</td><td>0-4</td></tr>
               <tr><td>1-5</td><td>Key Vault 런타임 시크릿 조회(SDK/관리 ID) 구현</td><td>app</td><td>—</td></tr>
               <tr><td>1-6</td><td>슬기 API/MCP 아웃바운드 클라이언트 구현</td><td>app</td><td>0-3, 2-2</td></tr>
@@ -386,7 +386,7 @@ flowchart LR
               <tr><td>Q1</td><td>진입점을 MCP 툴 / REST API / 둘 다 중 무엇으로?</td><td>앱·APIM·커넥터 구조</td><td>아키텍트</td></tr>
               <tr><td>Q2</td><td>DRM API 스펙(인증·포맷·동기성·파일전달)?</td><td>Phase 1 전체</td><td>DRM 팀</td></tr>
               <tr><td>Q3</td><td>상암 DC 연결을 ExpressRoute / S2S VPN 중 무엇으로?</td><td>Phase 2 전체·비용</td><td>네트워크 팀</td></tr>
-              <tr><td>Q4</td><td>복호화 결과 반환 경로: OneDrive 직접 / Blob 다운로드 링크?</td><td>Graph 권한 모델</td><td>아키텍트</td></tr>
+              <tr><td>Q4</td><td>복호화 결과 반환 경로: Client Application 직접 / Blob 다운로드 링크?</td><td>클라이언트 권한 모델</td><td>아키텍트</td></tr>
               <tr><td>Q5</td><td>슬기 API 연동의 트리거 시점(복호화 전/후/병렬)?</td><td>파이프라인 순서</td><td>업무 담당</td></tr>
               <tr><td>Q6</td><td>대용량 HWP·장시간 작업 시 동기 vs 비동기 처리?</td><td>1-1·1-7 설계</td><td>아키텍트</td></tr>
             </tbody>
@@ -402,7 +402,7 @@ flowchart LR
               <tr><td>DRM/슬기 스펙 미확보</td><td>높음</td><td>목 인터페이스로 Phase 1 병행, 계약서 우선 확정</td></tr>
               <tr><td>민감정보(복호화 파일) 유출</td><td>높음</td><td>Private Endpoint·전송/저장 암호화·짧은 보존주기·감사 로깅</td></tr>
               <tr><td>APIM Consumption 한계</td><td>중간</td><td>VNet 통합 가능 티어로 조기 전환 검토</td></tr>
-              <tr><td>OneDrive Graph 권한 과다</td><td>중간</td><td>최소 권한 스코프·사이트/폴더 한정 위임</td></tr>
+              <tr><td>클라이언트 파일 전달 권한 모델 복잡도</td><td>중간</td><td>최소 권한·짧은 수명 링크·감사 로깅 적용</td></tr>
             </tbody>
           </table>
         </section>

@@ -1,6 +1,6 @@
 # Azure 인프라 배포 가이드 (신규 구독)
 
-이 문서는 `lgup-m365-mcp` 스택을 **새로운 Azure 구독**에 처음부터 배포하는 방법과,
+이 문서는 이 스택을 **새로운 Azure 구독**에 처음부터 배포하는 방법과,
 배포되는 리소스들의 **관계도**를 설명합니다.
 
 대상 템플릿: [main.bicep](../main.bicep) (subscription 스코프) + [modules/](../modules/) + 파라미터 [main.dev.bicepparam](../main.dev.bicepparam)
@@ -45,10 +45,9 @@
 
 ```mermaid
 flowchart TB
-    subgraph M365["Microsoft 365 (외부)"]
-        CS[Copilot Studio]
-        SP[SharePoint / OneDrive]
-        TM[Teams / Outlook]
+    subgraph CLIENT["Client applications (external)"]
+        CS[Copilot Studio Agent]
+        CA[Client Application]
     end
 
     subgraph ENT["엔터프라이즈 시스템 (외부)"]
@@ -77,6 +76,7 @@ flowchart TB
     end
 
     CS -->|호출| APIM
+    CA -->|호출| APIM
     APIM -->|"/mcp, /health<br/>serviceUrl"| APP
 
     APP -.->|UAMI 인증| UAMI
@@ -90,8 +90,6 @@ flowchart TB
     APPI --> LAW
     CAE -->|appLogs| LAW
 
-    APP -->|연동| SP
-    APP -->|연동| TM
     APP -->|연동| NGIS
     APP -->|연동| PSS
     APP -->|연동| TIRO
@@ -124,7 +122,7 @@ flowchart LR
 | Bicep CLI | `az bicep upgrade`로 최신화 |
 | 권한 | 신규 구독에 **Owner** 또는 **Contributor + User Access Administrator** (롤 할당을 만들기 때문에 RBAC 쓰기 권한 필수) |
 | 구독 | 배포 대상 신규 Azure 구독 ID |
-| 시크릿 값 | `m365ClientSecret`, `ngisApiKey`, `drmApiKey` 실제 값 |
+| 시크릿 값 | `clientApplicationSecret`, `ngisApiKey`, `drmApiKey` 실제 값 |
 
 > 롤 할당(Key Vault Secrets User, AcrPull)을 만들기 때문에 단순 Contributor만으로는 실패할 수 있습니다. `User Access Administrator` 또는 `Owner` 권한이 필요합니다.
 
@@ -168,19 +166,20 @@ az provider show -n Microsoft.App --query registrationState -o tsv
 
 ### 4.3 파라미터 파일 준비
 
-[main.dev.bicepparam](../main.dev.bicepparam)를 복사해 환경에 맞게 수정합니다. (시크릿은 파일에 평문 저장하지 말고 4.4의 인라인 주입을 권장)
+[main.dev.bicepparam](../main.dev.bicepparam)는 체크인되는 샘플 파일입니다. 실제 환경값이 필요한 경우 로컬의 추적되지 않는 파일(예: `main.local.bicepparam`)로 복사해 사용하고, 시크릿은 파일에 평문 저장하지 말고 4.4의 인라인 주입을 권장합니다.
 
 ```bash
-cp main.dev.bicepparam main.prod.bicepparam
+cp main.dev.bicepparam main.local.bicepparam
 ```
 
 수정 대상:
 
 - `location`, `namePrefix`, `environmentName`, `resourceGroupName`(필요 시 `main.bicep` 기본값 override)
-- `m365` 블록: 실제 테넌트 ID / SharePoint / OneDrive / Teams / Copilot Studio 값
+- `copilotStudio` 블록: 실제 테넌트 ID / Copilot Studio 환경 값
 - `integrations` 블록: 실제 NGIS / PSS / Tiro / Confluence / DRM / APIM 엔드포인트
 - `containerImage`: 실제 MCP 이미지 (초기 검증은 기본 helloworld 이미지로 가능)
 - `apimPublisherEmail`, `apimPublisherName`
+- `authClientId`: APIM과 Container Apps가 신뢰할 Entra 애플리케이션(리소스/API) Client ID (필수)
 
 ### 4.4 What-If로 사전 검증
 
@@ -191,14 +190,14 @@ az deployment sub what-if \
   --name lgup-mcp-whatif \
   --location koreacentral \
   --template-file main.bicep \
-  --parameters main.dev.bicepparam \
+  --parameters main.local.bicepparam \
   --parameters \
-      m365ClientSecret="$M365_CLIENT_SECRET" \
+      clientApplicationSecret="$CLIENT_APPLICATION_SECRET" \
       ngisApiKey="$NGIS_API_KEY" \
       drmApiKey="$DRM_API_KEY"
 ```
 
-> 시크릿은 셸 환경변수로 주입하세요. 예: `export M365_CLIENT_SECRET='...'` (히스토리에 남지 않도록 주의)
+> 시크릿은 셸 환경변수로 주입하세요. 예: `export CLIENT_APPLICATION_SECRET='...'` (히스토리에 남지 않도록 주의)
 
 ### 4.5 배포 실행
 
@@ -207,9 +206,9 @@ az deployment sub create \
   --name lgup-mcp-deploy \
   --location koreacentral \
   --template-file main.bicep \
-  --parameters main.dev.bicepparam \
+  --parameters main.local.bicepparam \
   --parameters \
-      m365ClientSecret="$M365_CLIENT_SECRET" \
+      clientApplicationSecret="$CLIENT_APPLICATION_SECRET" \
       ngisApiKey="$NGIS_API_KEY" \
       drmApiKey="$DRM_API_KEY"
 ```
@@ -245,10 +244,10 @@ az deployment sub create \
   --name lgup-mcp-deploy \
   --location koreacentral \
   --template-file main.bicep \
-  --parameters main.dev.bicepparam \
+  --parameters main.local.bicepparam \
   --parameters containerImage="${ACR_NAME}.azurecr.io/hanik-mcp-server:1.0.0" \
   --parameters \
-      m365ClientSecret="$M365_CLIENT_SECRET" \
+      clientApplicationSecret="$CLIENT_APPLICATION_SECRET" \
       ngisApiKey="$NGIS_API_KEY" \
       drmApiKey="$DRM_API_KEY"
 ```
@@ -264,14 +263,19 @@ az deployment sub create \
 APP_URL=$(az deployment sub show -n lgup-mcp-deploy --query "properties.outputs.containerAppUrl.value" -o tsv)
 curl -s "$APP_URL/health"
 
-# APIM 게이트웨이를 통한 MCP 엔드포인트 (구독 키 필요)
-APIM_NAME=$(az deployment sub show -n lgup-mcp-deploy --query "properties.outputs.apimGatewayUrl.value" -o tsv)
+# APIM 게이트웨이를 통한 MCP 엔드포인트 (Entra Bearer 토큰 필요)
+APIM_GATEWAY_URL=$(az deployment sub show -n lgup-mcp-deploy --query "properties.outputs.apimGatewayUrl.value" -o tsv)
 ```
 
-APIM은 `subscriptionRequired: true`이므로 `/mcp` 호출 시 `Ocp-Apim-Subscription-Key` 헤더가 필요합니다. 구독 키는 포털 또는 CLI로 조회합니다.
+APIM은 `/mcp` 호출 시 Entra Bearer 토큰을 요구합니다. `authClientId`는 필수이며, APIM이 OpenID metadata를 사용해 audience를 검증합니다.
+
+호출 예시:
 
 ```bash
-az apim subscription show ... # 또는 포털 > API Management > Subscriptions > mcp-subscription > Keys
+curl -X POST "$APIM_GATEWAY_URL/mcp" \
+  -H "Authorization: Bearer <ENTRA_ACCESS_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
 
 ---
@@ -307,7 +311,7 @@ az group delete --name lgup-rg --yes --no-wait
 - [ ] `az login` 및 신규 구독 선택
 - [ ] 리소스 공급자 등록 완료
 - [ ] RBAC 권한(Owner / UAA) 확인
-- [ ] 파라미터 파일의 M365 / integrations 실제 값으로 교체
+- [ ] 파라미터 파일의 Copilot Studio / integrations 실제 값으로 교체
 - [ ] 시크릿을 환경변수로 준비 (`replace-me` 제거)
 - [ ] `what-if`로 사전 검증
 - [ ] `az deployment sub create`로 배포
