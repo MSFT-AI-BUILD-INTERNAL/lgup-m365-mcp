@@ -8,6 +8,8 @@ const SERVER_VERSION = "1.0.0";
 // Port is configurable so the Bicep-deployed Container App can inject containerPort (default 8080).
 const PORT = Number(process.env.PORT ?? 8080);
 
+const REQUIRED_SCOPE = "access_as_user";
+
 /**
  * Decode the payload (claims) of a JWT without verifying its signature.
  * NOTE: This only reads claims for display. For trust decisions the token
@@ -156,8 +158,107 @@ app.get("/health", (_req: Request, res: Response) => {
   res.status(200).json({ status: "ok", server: SERVER_NAME, version: SERVER_VERSION });
 });
 
+// RFC 9728 — OAuth Protected Resource Metadata.
+// Advertises this server's auth requirements so OAuth-aware MCP clients can auto-discover them.
+app.get("/.well-known/oauth-protected-resource", (req: Request, res: Response) => {
+  const authClientId = process.env.AUTH_CLIENT_ID;
+  const authTenantId = process.env.AUTH_TENANT_ID;
+
+  if (!authClientId || !authTenantId) {
+    res.status(503).json({
+      error: "OAuth metadata not configured. AUTH_CLIENT_ID and AUTH_TENANT_ID environment variables are required.",
+    });
+    return;
+  }
+
+  // Point to our own server as the authorization server metadata host.
+  const baseUrl = `${req.protocol}://${req.get("host")}`;
+
+  res.json({
+    resource: `api://${authClientId}`,
+    authorization_servers: [baseUrl],
+    scopes_supported: ["access_as_user"],
+    bearer_methods_supported: ["header"],
+  });
+});
+
+// RFC 8414 — OAuth Authorization Server Metadata.
+// Advertises Entra ID endpoints so OAuth clients can discover token/authorize URLs.
+app.get("/.well-known/oauth-authorization-server", (req: Request, res: Response) => {
+  const authClientId = process.env.AUTH_CLIENT_ID;
+  const authTenantId = process.env.AUTH_TENANT_ID;
+
+  if (!authClientId || !authTenantId) {
+    res.status(503).json({
+      error: "OAuth metadata not configured. AUTH_CLIENT_ID and AUTH_TENANT_ID environment variables are required.",
+    });
+    return;
+  }
+
+  const baseUrl = `${req.protocol}://${req.get("host")}`;
+  const entraBase = `https://login.microsoftonline.com/${authTenantId}/v2.0`;
+
+  res.json({
+    issuer: entraBase,
+    authorization_endpoint: `https://login.microsoftonline.com/${authTenantId}/oauth2/v2.0/authorize`,
+    token_endpoint: `https://login.microsoftonline.com/${authTenantId}/oauth2/v2.0/token`,
+    jwks_uri: `https://login.microsoftonline.com/${authTenantId}/discovery/v2.0/keys`,
+    scopes_supported: ["openid", "profile", "email", "offline_access", `api://${authClientId}/access_as_user`],
+    response_types_supported: ["code"],
+    grant_types_supported: ["authorization_code", "client_credentials"],
+    token_endpoint_auth_methods_supported: ["client_secret_post", "client_secret_basic"],
+    code_challenge_methods_supported: ["S256"],
+  });
+});
+
+// Streamable HTTP MCP endpoint (stateless: a new server + transport per request).
+/**
+ * Validates that the incoming request carries a token with the required scope.
+ * APIM performs primary JWT signature/audience/issuer validation; this is a
+ * defence-in-depth check ensuring the correct delegated permission is present.
+ */
+function requireScope(req: Request, res: Response): boolean {
+  const authHeader = req.headers["authorization"];
+  if (typeof authHeader !== "string" || !authHeader.toLowerCase().startsWith("bearer ")) {
+    const authClientId = process.env.AUTH_CLIENT_ID ?? "";
+    const authTenantId = process.env.AUTH_TENANT_ID ?? "";
+    res.setHeader(
+      "WWW-Authenticate",
+      `Bearer realm="api://${authClientId}", authorization_uri="https://login.microsoftonline.com/${authTenantId}/oauth2/v2.0/authorize"`
+    );
+    res.status(401).json({
+      jsonrpc: "2.0",
+      error: { code: -32000, message: "Unauthorized. Bearer token required." },
+      id: null,
+    });
+    return false;
+  }
+
+  const claims = decodeJwtClaims(authHeader.slice(7).trim());
+  if (claims) {
+    const scp = typeof claims.scp === "string" ? claims.scp.split(" ") : [];
+    const roles = Array.isArray(claims.roles) ? (claims.roles as string[]) : [];
+    const allScopes = [...scp, ...roles];
+    if (!allScopes.includes(REQUIRED_SCOPE)) {
+      res.status(403).json({
+        jsonrpc: "2.0",
+        error: {
+          code: -32000,
+          message: `Forbidden. Token must include the '${REQUIRED_SCOPE}' scope.`,
+        },
+        id: null,
+      });
+      return false;
+    }
+  }
+
+  return true;
+}
+
 // Streamable HTTP MCP endpoint (stateless: a new server + transport per request).
 app.post("/mcp", async (req: Request, res: Response) => {
+  if (!requireScope(req, res)) return;
+
   const server = createMcpServer(req);
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,

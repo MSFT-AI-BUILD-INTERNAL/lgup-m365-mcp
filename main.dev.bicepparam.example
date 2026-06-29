@@ -32,7 +32,6 @@ param maxReplicas = 2
 param containerCpu = 1
 param containerMemory = '2Gi'
 
-param clientApplicationSecret = 'replace-me'
 param ngisApiKey = 'replace-me'
 param drmApiKey = 'replace-me'
 

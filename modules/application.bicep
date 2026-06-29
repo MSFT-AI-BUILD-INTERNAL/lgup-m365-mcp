@@ -11,8 +11,6 @@ param keyVaultUri string
 param copilotStudio object
 param integrations object
 @secure()
-param clientApplicationSecret string
-@secure()
 param ngisApiKey string = ''
 @secure()
 param drmApiKey string = ''
@@ -27,6 +25,10 @@ param tags object
 @description('Entra ID application (client) ID used for Container Apps built-in authentication.')
 param authClientId string
 
+@secure()
+@description('Entra ID application client secret returned by the Dynamic Client Registration endpoint.')
+param authClientSecret string = ''
+
 @description('Entra ID tenant ID used as the token issuer for built-in authentication.')
 param authTenantId string = ''
 
@@ -37,10 +39,10 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09
   name: logAnalyticsWorkspaceName
 }
 
-var containerAppSecrets = concat([
+var containerAppSecrets = concat(empty(authClientSecret) ? [] : [
   {
-    name: 'client-application-secret'
-    value: clientApplicationSecret
+    name: 'auth-client-secret'
+    value: authClientSecret
   }
 ], empty(ngisApiKey) ? [] : [
   {
@@ -62,6 +64,14 @@ var containerAppEnv = concat([
   {
     name: 'AZURE_CLIENT_ID'
     value: managedIdentityClientId
+  }
+  {
+    name: 'AUTH_CLIENT_ID'
+    value: authClientId
+  }
+  {
+    name: 'AUTH_TENANT_ID'
+    value: authTenantId
   }
   {
     name: 'COPILOT_TENANT_ID'
@@ -99,9 +109,10 @@ var containerAppEnv = concat([
     name: 'KEY_VAULT_URI'
     value: keyVaultUri
   }
+], empty(authClientSecret) ? [] : [
   {
-    name: 'CLIENT_APPLICATION_SECRET'
-    secretRef: 'client-application-secret'
+    name: 'AUTH_CLIENT_SECRET'
+    secretRef: 'auth-client-secret'
   }
 ], empty(ngisApiKey) ? [] : [
   {
@@ -173,10 +184,10 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
                 path: '/health'
                 port: containerPort
               }
-              initialDelaySeconds: 10
-              periodSeconds: 10
+              initialDelaySeconds: 5
+              periodSeconds: 5
               timeoutSeconds: 5
-              failureThreshold: 30
+              failureThreshold: 60
             }
             {
               type: 'Liveness'
@@ -184,10 +195,10 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
                 path: '/health'
                 port: containerPort
               }
-              initialDelaySeconds: 30
+              initialDelaySeconds: 0
               periodSeconds: 30
-              timeoutSeconds: 5
-              failureThreshold: 3
+              timeoutSeconds: 10
+              failureThreshold: 5
             }
             {
               type: 'Readiness'
@@ -195,10 +206,10 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
                 path: '/health'
                 port: containerPort
               }
-              initialDelaySeconds: 10
+              initialDelaySeconds: 0
               periodSeconds: 10
               timeoutSeconds: 5
-              failureThreshold: 6
+              failureThreshold: 10
             }
           ]
         }

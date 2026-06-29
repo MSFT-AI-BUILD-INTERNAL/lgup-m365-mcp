@@ -8,7 +8,7 @@ usage() {
 Usage: ./deploy-bicep.sh [--what-if] [--register-providers] [--param-file FILE] [--deployment-name NAME] [--location LOCATION]
 
 Environment variables:
-  CLIENT_APPLICATION_SECRET   Required
+  AUTH_CLIENT_SECRET          Optional; Entra app client secret for Dynamic Client Registration
   NGIS_API_KEY                Optional
   DRM_API_KEY                 Optional
   SUBSCRIPTION_ID             Optional; if set, az account set --subscription is executed
@@ -119,7 +119,6 @@ if [[ -z "$DEPLOYMENT_LOCATION" ]]; then
   exit 1
 fi
 
-require_env CLIENT_APPLICATION_SECRET
 if [[ -n "${SUBSCRIPTION_ID:-}" ]]; then
   az account set --subscription "$SUBSCRIPTION_ID"
 fi
@@ -155,8 +154,11 @@ deployment_args=(
   containerRegistryName=''
   enableContainerRegistryOnDeploy=false
   containerImage="$BOOTSTRAP_CONTAINER_IMAGE"
-  clientApplicationSecret="$CLIENT_APPLICATION_SECRET"
 )
+
+if [[ -n "${AUTH_CLIENT_SECRET:-}" ]]; then
+  deployment_args+=(authClientSecret="$AUTH_CLIENT_SECRET")
+fi
 
 if [[ -n "${NGIS_API_KEY:-}" ]]; then
   deployment_args+=(ngisApiKey="$NGIS_API_KEY")

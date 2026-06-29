@@ -73,7 +73,7 @@ resource opPostMcpPolicy 'Microsoft.ApiManagement/service/apis/operations/polici
   name: 'policy'
   properties: {
     format: 'xml'
-    value: '<policies><inbound><validate-jwt header-name="Authorization" require-scheme="Bearer" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized. Valid Entra bearer token required."><openid-config url="https://login.microsoftonline.com/${authTenantId}/v2.0/.well-known/openid-configuration" /><audiences><audience>api://${authClientId}</audience><audience>${authClientId}</audience></audiences></validate-jwt><base /></inbound><backend><base /></backend><outbound><base /></outbound><on-error><base /></on-error></policies>'
+    value: '<policies><inbound><validate-jwt header-name="Authorization" require-scheme="Bearer" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized. Valid Entra bearer token required."><openid-config url="https://login.microsoftonline.com/${authTenantId}/v2.0/.well-known/openid-configuration" /><audiences><audience>api://${authClientId}</audience><audience>${authClientId}</audience></audiences><required-claims><claim name="scp" match="any"><value>access_as_user</value></claim></required-claims></validate-jwt><base /></inbound><backend><base /></backend><outbound><base /></outbound><on-error><base /></on-error></policies>'
   }
 }
 
@@ -84,6 +84,28 @@ resource opHealth 'Microsoft.ApiManagement/service/apis/operations@2022-08-01' =
     displayName: 'Health'
     method: 'GET'
     urlTemplate: '/health'
+  }
+}
+
+// RFC 9728 — OAuth Protected Resource Metadata (unauthenticated, for Copilot Studio Dynamic discovery).
+resource opWellKnown 'Microsoft.ApiManagement/service/apis/operations@2022-08-01' = {
+  parent: api
+  name: 'get-oauth-protected-resource'
+  properties: {
+    displayName: 'OAuth Protected Resource Metadata'
+    method: 'GET'
+    urlTemplate: '/.well-known/oauth-protected-resource'
+  }
+}
+
+// RFC 8414 — OAuth Authorization Server Metadata (unauthenticated).
+resource opAuthServerMeta 'Microsoft.ApiManagement/service/apis/operations@2022-08-01' = {
+  parent: api
+  name: 'get-oauth-authorization-server'
+  properties: {
+    displayName: 'OAuth Authorization Server Metadata'
+    method: 'GET'
+    urlTemplate: '/.well-known/oauth-authorization-server'
   }
 }
 

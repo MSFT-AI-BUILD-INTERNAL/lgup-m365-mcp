@@ -10,7 +10,7 @@ param environmentName string = 'dev'
 param location string = 'eastasia'
 
 @description('Resource group name.')
-param resourceGroupName string = 'lgup-rg'
+param resourceGroupName string = 'rg-ms-azure-ax-prd'
 
 @description('Tags applied to all supported resources.')
 param tags object = {
@@ -66,10 +66,6 @@ param containerCpu int = 1
 param containerMemory string = '2Gi'
 
 @secure()
-@description('Client application secret used for downstream authenticated integrations.')
-param clientApplicationSecret string
-
-@secure()
 @description('API key for NGIS integration.')
 param ngisApiKey string = ''
 
@@ -85,6 +81,10 @@ param apimPublisherName string = 'LGUP MCP'
 
 @description('Entra ID application (client) ID used for APIM JWT validation and Container Apps built-in authentication.')
 param authClientId string
+
+@secure()
+@description('Entra ID application client secret used for Dynamic Client Registration (RFC 7591). Copilot Studio Dynamic mode requires this.')
+param authClientSecret string = ''
 
 // Create the resource group
 resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
@@ -150,7 +150,6 @@ module application './modules/application.bicep' = {
     containerRegistryServer: enableContainerRegistryOnDeploy ? containerRegistryLoginServer : ''
     copilotStudio: copilotStudio
     integrations: integrations
-    clientApplicationSecret: clientApplicationSecret
     ngisApiKey: ngisApiKey
     drmApiKey: drmApiKey
     containerImage: containerImage
@@ -160,6 +159,7 @@ module application './modules/application.bicep' = {
     containerCpu: containerCpu
     containerMemory: containerMemory
     authClientId: authClientId
+    authClientSecret: authClientSecret
     authTenantId: subscription().tenantId
     tags: tags
   }
