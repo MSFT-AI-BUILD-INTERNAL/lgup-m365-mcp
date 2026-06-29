@@ -1,6 +1,6 @@
 # Azure 인프라 배포 가이드 (신규 구독)
 
-이 문서는 `lgup-m365-mcp` 스택을 **새로운 Azure 구독**에 처음부터 배포하는 방법과,
+이 문서는 이 스택을 **새로운 Azure 구독**에 처음부터 배포하는 방법과,
 배포되는 리소스들의 **관계도**를 설명합니다.
 
 대상 템플릿: [main.bicep](../main.bicep) (subscription 스코프) + [modules/](../modules/) + 파라미터 [main.dev.bicepparam](../main.dev.bicepparam)
@@ -10,15 +10,16 @@
 ## 1. 무엇이 만들어지는가
 
 `main.bicep`은 **구독 스코프(`targetScope = 'subscription'`)**에서 실행되며,
-리소스 그룹 1개를 만든 뒤 그 안에 아래 5개 모듈을 순서대로 배포합니다.
+리소스 그룹 1개를 만들거나 재사용한 뒤 그 안에 아래 6개 모듈을 순서대로 배포합니다.
 
 | 순서 | 모듈 | 생성 리소스 | 핵심 역할 |
 |------|------|-------------|-----------|
 | 1 | [observability.bicep](../modules/observability.bicep) | Log Analytics Workspace, Application Insights | 로그/메트릭/추적 수집 |
-| 2 | [platform-foundation.bicep](../modules/platform-foundation.bicep) | User-Assigned Managed Identity, Key Vault, Storage Account(+3 컨테이너), Key Vault Secrets User 롤 | 워크로드 ID·시크릿·스토리지 기반 |
-| 3 | [registry.bicep](../modules/registry.bicep) | Azure Container Registry(ACR), AcrPull 롤 | 컨테이너 이미지 저장/Pull |
-| 4 | [application.bicep](../modules/application.bicep) | Container Apps Environment, Container App(MCP/API) | MCP 서버 런타임 |
-| 5 | [gateway.bicep](../modules/gateway.bicep) | API Management(Consumption), API/Operation/Policy/Subscription | 외부 진입 게이트웨이(`/mcp`) |
+| 2 | [platform-foundation.bicep](../modules/platform-foundation.bicep) | User-Assigned Managed Identity | 워크로드 ID 기반 |
+| 3 | [key-vault-access.bicep](../modules/key-vault-access.bicep) | 기존 Key Vault 참조 | 시크릿 리소스 연결 |
+| 4 | [registry.bicep](../modules/registry.bicep) | 기존 Azure Container Registry(ACR) 참조 | 컨테이너 레지스트리 연결 |
+| 5 | [application.bicep](../modules/application.bicep) | Container Apps Environment, Container App(MCP/API) | MCP 서버 런타임 |
+| 6 | [gateway.bicep](../modules/gateway.bicep) | API Management(Consumption), API/Operation/Policy/Subscription | 외부 진입 게이트웨이(`/mcp`) |
 
 ### 생성되는 리소스 명명 규칙
 
@@ -32,12 +33,11 @@
 | Managed Identity | `{prefix}-{env}-uami` | `lgmcp-dev-uami` |
 | Container Apps Env | `{prefix}-{env}-cae` | `lgmcp-dev-cae` |
 | Container App | `{prefix}-{env}-mcp-api` | `lgmcp-dev-mcp-api` |
-| Key Vault | `{normalizedPrefix}{env}kv{hash}` (24자 제한) | `lgmcpdevkv3x7...` |
-| Storage Account | `{normalizedPrefix}{env}st{hash}` (24자 제한) | `lgmcpdevst3x7...` |
-| Container Registry | `{normalizedPrefix}{env}acr{hash}` | `lgmcpdevacr3x7...` |
+| Key Vault | `keyVaultName` 파라미터(사전 생성) | `my-existing-kv` |
+| Container Registry | `containerRegistryName` 파라미터(사전 생성) | `myexistingacr` |
 | API Management | `{prefix}-{env}-apim-{hash}` | `lgmcp-dev-apim-3x7...` |
 
-> `uniqueString(subscription().id, resourceGroupName)` 해시가 포함되므로 구독이 바뀌면 전역 고유 이름(KV/Storage/ACR/APIM)이 자동으로 달라집니다.
+> `uniqueString(subscription().id, resourceGroupName)` 해시가 포함되므로 구독이 바뀌면 전역 고유 이름(APIM 등)이 자동으로 달라집니다.
 
 ---
 
@@ -45,10 +45,9 @@
 
 ```mermaid
 flowchart TB
-    subgraph M365["Microsoft 365 (외부)"]
-        CS[Copilot Studio]
-        SP[SharePoint / OneDrive]
-        TM[Teams / Outlook]
+    subgraph CLIENT["Client applications (external)"]
+        CS[Copilot Studio Agent]
+        CA[Client Application]
     end
 
     subgraph ENT["엔터프라이즈 시스템 (외부)"]
@@ -68,8 +67,7 @@ flowchart TB
             end
 
             UAMI["User-Assigned<br/>Managed Identity"]
-            KV["Key Vault"]
-            ST["Storage Account<br/>incoming-nonhwp / result-hwp / processing-artifacts"]
+            KV["Existing Key Vault"]
             ACR["Container Registry"]
             LAW["Log Analytics"]
             APPI["Application Insights"]
@@ -77,21 +75,19 @@ flowchart TB
     end
 
     CS -->|호출| APIM
+    CA -->|호출| APIM
     APIM -->|"/mcp, /health<br/>serviceUrl"| APP
 
     APP -.->|UAMI 인증| UAMI
-    UAMI -->|Secrets User| KV
-    UAMI -->|AcrPull| ACR
+    UAMI -.->|수동 RBAC| KV
+    UAMI -.->|수동 RBAC| ACR
     ACR -->|이미지 Pull| APP
 
-    APP -->|Blob 읽기/쓰기| ST
     APP -->|로그/메트릭| LAW
     APP -->|추적| APPI
     APPI --> LAW
     CAE -->|appLogs| LAW
 
-    APP -->|연동| SP
-    APP -->|연동| TM
     APP -->|연동| NGIS
     APP -->|연동| PSS
     APP -->|연동| TIRO
@@ -104,14 +100,17 @@ flowchart TB
 ```mermaid
 flowchart LR
     OBS[observability] --> APPMOD[application]
-    FND[platform-foundation] --> REG[registry]
+    FND[platform-foundation] --> KV[key-vault-access]
+    FND --> REG[registry]
     FND --> APPMOD
+    KV --> APPMOD
     REG --> APPMOD
     APPMOD --> GW[gateway]
 ```
 
-- `registry`는 `foundation`의 Managed Identity Principal ID가 있어야 AcrPull 롤을 만들 수 있습니다.
-- `application`은 `observability`(App Insights 연결 문자열), `foundation`(ID/KV/Storage), `registry`(ACR 로그인 서버)의 출력에 의존합니다.
+- `key-vault-access`는 기존 Key Vault 이름으로 URI를 조회합니다.
+- `registry`는 기존 ACR 이름으로 로그인 서버를 조회합니다.
+- `application`은 `observability`(App Insights 연결 문자열), `foundation`(ID), `key-vault-access`(기존 Key Vault URI), `registry`(기존 ACR 로그인 서버)의 출력에 의존합니다.
 - `gateway`는 `application`의 Container App URL을 백엔드(`serviceUrl`)로 사용합니다.
 
 ---
@@ -122,11 +121,11 @@ flowchart LR
 |------|------|
 | Azure CLI | 2.50 이상 권장 (`az version`) |
 | Bicep CLI | `az bicep upgrade`로 최신화 |
-| 권한 | 신규 구독에 **Owner** 또는 **Contributor + User Access Administrator** (롤 할당을 만들기 때문에 RBAC 쓰기 권한 필수) |
+| 권한 | 신규 구독에 리소스 생성 권한 + 수동 RBAC 설정 권한 |
 | 구독 | 배포 대상 신규 Azure 구독 ID |
-| 시크릿 값 | `m365ClientSecret`, `ngisApiKey`, `drmApiKey` 실제 값 |
+| 시크릿 값 | `clientApplicationSecret` 실제 값, 필요 시 `ngisApiKey`/`drmApiKey` |
 
-> 롤 할당(Key Vault Secrets User, AcrPull)을 만들기 때문에 단순 Contributor만으로는 실패할 수 있습니다. `User Access Administrator` 또는 `Owner` 권한이 필요합니다.
+> 이 스택은 RBAC를 자동 생성하지 않습니다. Key Vault/ACR 접근 권한은 배포 후 수동으로 설정해야 합니다.
 
 ---
 
@@ -168,19 +167,22 @@ az provider show -n Microsoft.App --query registrationState -o tsv
 
 ### 4.3 파라미터 파일 준비
 
-[main.dev.bicepparam](../main.dev.bicepparam)를 복사해 환경에 맞게 수정합니다. (시크릿은 파일에 평문 저장하지 말고 4.4의 인라인 주입을 권장)
+[main.dev.bicepparam](../main.dev.bicepparam)는 체크인되는 샘플 파일입니다. 실제 환경값이 필요한 경우 로컬의 추적되지 않는 파일(예: `main.local.bicepparam`)로 복사해 사용하고, 시크릿은 파일에 평문 저장하지 말고 4.4의 인라인 주입을 권장합니다.
 
 ```bash
-cp main.dev.bicepparam main.prod.bicepparam
+cp main.dev.bicepparam main.local.bicepparam
 ```
 
 수정 대상:
 
 - `location`, `namePrefix`, `environmentName`, `resourceGroupName`(필요 시 `main.bicep` 기본값 override)
-- `m365` 블록: 실제 테넌트 ID / SharePoint / OneDrive / Teams / Copilot Studio 값
+- `copilotStudio` 블록: 실제 테넌트 ID / Copilot Studio 환경 값
 - `integrations` 블록: 실제 NGIS / PSS / Tiro / Confluence / DRM / APIM 엔드포인트
-- `containerImage`: 실제 MCP 이미지 (초기 검증은 기본 helloworld 이미지로 가능)
+- `keyVaultName`: `lgup-rg`에 미리 생성한 Key Vault 이름 (미사용 시 빈 값 가능)
+- `containerRegistryName`: `lgup-rg`에 미리 생성한 ACR 이름 (공개 이미지 검증 시 빈 값 가능)
+- `containerImage`: 실제 MCP 이미지 (초기 검증은 기본 helloworld 이미지 권장)
 - `apimPublisherEmail`, `apimPublisherName`
+- `authClientId`: APIM과 Container Apps가 신뢰할 Entra 애플리케이션(리소스/API) Client ID (필수)
 
 ### 4.4 What-If로 사전 검증
 
@@ -191,27 +193,21 @@ az deployment sub what-if \
   --name lgup-mcp-whatif \
   --location koreacentral \
   --template-file main.bicep \
-  --parameters main.dev.bicepparam \
+  --parameters main.local.bicepparam \
   --parameters \
-      m365ClientSecret="$M365_CLIENT_SECRET" \
+      clientApplicationSecret="$CLIENT_APPLICATION_SECRET" \
       ngisApiKey="$NGIS_API_KEY" \
       drmApiKey="$DRM_API_KEY"
 ```
 
-> 시크릿은 셸 환경변수로 주입하세요. 예: `export M365_CLIENT_SECRET='...'` (히스토리에 남지 않도록 주의)
+> 시크릿은 셸 환경변수로 주입하세요. 예: `export CLIENT_APPLICATION_SECRET='...'` (히스토리에 남지 않도록 주의)
 
 ### 4.5 배포 실행
 
+`deploy-bicep.sh`는 항상 public bootstrap 이미지를 사용해 인프라만 먼저 배포합니다.
+
 ```bash
-az deployment sub create \
-  --name lgup-mcp-deploy \
-  --location koreacentral \
-  --template-file main.bicep \
-  --parameters main.dev.bicepparam \
-  --parameters \
-      m365ClientSecret="$M365_CLIENT_SECRET" \
-      ngisApiKey="$NGIS_API_KEY" \
-      drmApiKey="$DRM_API_KEY"
+./deploy-bicep.sh --param-file main.local.bicepparam
 ```
 
 > `--location`은 배포 메타데이터가 저장될 리전이며, 실제 리소스 리전은 파라미터의 `location`을 따릅니다.
@@ -225,35 +221,41 @@ az deployment sub show \
   -o json
 ```
 
-주요 출력: `containerAppUrl`, `apimGatewayUrl`, `apimMcpEndpoint`, `keyVaultName`, `storageAccountName`, `containerRegistryLoginServer`.
+주요 출력: `containerAppUrl`, `apimGatewayUrl`, `apimMcpEndpoint`, `managedIdentityPrincipalId`, `keyVaultName`, `keyVaultUri`, `containerRegistryLoginServer`.
 
 ---
 
 ## 5. 애플리케이션 이미지 배포 (선택)
 
-초기엔 기본 helloworld 이미지로 인프라를 검증하고, 이후 실제 MCP 서버([app/](../app/))로 교체합니다.
+먼저 `deploy-bicep.sh`로 public bootstrap 이미지를 배포한 뒤, 이후 `deploy-app.sh`로 `lgup-rg`에 미리 만든 ACR의 실제 MCP 서버 이미지([app/](../app/))로 전환합니다.
+
+Container App 템플릿([modules/application.bicep](../modules/application.bicep))은 `/health` 경로에 대해 명시적 프로브를 사용합니다.
+
+- Startup probe: `initialDelay=10s`, `period=10s`, `timeout=5s`, `failureThreshold=30`
+- Liveness probe: `initialDelay=30s`, `period=30s`, `timeout=5s`, `failureThreshold=3`
+- Readiness probe: `initialDelay=10s`, `period=10s`, `timeout=5s`, `failureThreshold=6`
 
 ```bash
-# 1) 배포된 ACR 이름 확인
-ACR_NAME=$(az deployment sub show -n lgup-mcp-deploy --query "properties.outputs.containerRegistryName.value" -o tsv)
+# 1) 미리 준비한 ACR 이름 사용
+ACR_NAME='<your-acr-name>'
 
-# 2) ACR 빌드(클라우드 빌드)
-az acr build --registry "$ACR_NAME" --image hanik-mcp-server:1.0.0 ./app
+# 2) Container App 생성 후 수동으로 AcrPull 부여
+az role assignment create \
+  --assignee-object-id "$(az deployment sub show -n lgup-mcp-deploy --query "properties.outputs.managedIdentityPrincipalId.value" -o tsv)" \
+  --assignee-principal-type ServicePrincipal \
+  --role "AcrPull" \
+  --scope "$(az acr show -n "$ACR_NAME" -g lgup-rg --query id -o tsv)"
 
-# 3) containerImage 파라미터를 새 이미지로 바꿔 재배포
-az deployment sub create \
-  --name lgup-mcp-deploy \
-  --location koreacentral \
-  --template-file main.bicep \
-  --parameters main.dev.bicepparam \
-  --parameters containerImage="${ACR_NAME}.azurecr.io/hanik-mcp-server:1.0.0" \
-  --parameters \
-      m365ClientSecret="$M365_CLIENT_SECRET" \
-      ngisApiKey="$NGIS_API_KEY" \
-      drmApiKey="$DRM_API_KEY"
+# 3) 이미지 빌드/푸시 + 기존 Container App 전환
+./deploy-app.sh \
+  --param-file main.local.bicepparam \
+  --registry-name "$ACR_NAME" \
+  --image "${ACR_NAME}.azurecr.io/hanik-mcp-server:1.0.0"
 ```
 
-> Container App은 UAMI의 `AcrPull` 권한으로 이미지를 가져오므로 admin 사용자/패스워드가 필요 없습니다.
+`deploy-app.sh`는 이미지 업데이트 후 `/health`를 최대 약 100초(20회 × 5초) 검증하며, 실패 시 즉시 종료하고 진단 명령을 출력합니다.
+
+> `deploy-bicep.sh`는 ACR이 아직 없어도 public 이미지로 먼저 배포됩니다. ACR 생성 및 수동 `AcrPull` 부여 후 `deploy-app.sh`를 실행하세요.
 
 ---
 
@@ -264,15 +266,65 @@ az deployment sub create \
 APP_URL=$(az deployment sub show -n lgup-mcp-deploy --query "properties.outputs.containerAppUrl.value" -o tsv)
 curl -s "$APP_URL/health"
 
-# APIM 게이트웨이를 통한 MCP 엔드포인트 (구독 키 필요)
-APIM_NAME=$(az deployment sub show -n lgup-mcp-deploy --query "properties.outputs.apimGatewayUrl.value" -o tsv)
+# APIM 게이트웨이를 통한 MCP 엔드포인트 (Entra Bearer 토큰 필요)
+APIM_GATEWAY_URL=$(az deployment sub show -n lgup-mcp-deploy --query "properties.outputs.apimGatewayUrl.value" -o tsv)
 ```
 
-APIM은 `subscriptionRequired: true`이므로 `/mcp` 호출 시 `Ocp-Apim-Subscription-Key` 헤더가 필요합니다. 구독 키는 포털 또는 CLI로 조회합니다.
+APIM은 `/mcp` 호출 시 Entra Bearer 토큰을 요구합니다. `authClientId`는 필수이며, APIM이 OpenID metadata를 사용해 audience를 검증합니다.
+
+호출 예시:
 
 ```bash
-az apim subscription show ... # 또는 포털 > API Management > Subscriptions > mcp-subscription > Keys
+curl -X POST "$APIM_GATEWAY_URL/mcp" \
+  -H "Authorization: Bearer <ENTRA_ACCESS_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
+
+### 6.1 Startup probe 실패(ContainerTerminated) 트러블슈팅
+
+`deploy-app.sh` 또는 롤아웃 중 `ContainerTerminated`/startup probe 실패가 보이면 아래 순서로 확인하세요.
+
+```bash
+# 1) 앱/프로비저닝 상태 및 최신 준비 리비전 확인
+az containerapp show \
+  --name <container-app-name> \
+  --resource-group <resource-group> \
+  --query "{runningStatus:properties.runningStatus, provisioningState:properties.provisioningState, latestReadyRevision:properties.latestReadyRevisionName}" \
+  -o json
+
+# 2) 리비전 상태 확인 (실패/비정상 리비전 식별)
+az containerapp revision list \
+  --name <container-app-name> \
+  --resource-group <resource-group> \
+  -o table
+
+# 3) 시스템 로그(프로브/플랫폼 이벤트) 확인
+az containerapp logs show \
+  --name <container-app-name> \
+  --resource-group <resource-group> \
+  --type system \
+  --tail 200
+
+# 4) 앱 콘솔 로그 확인
+az containerapp logs show \
+  --name <container-app-name> \
+  --resource-group <resource-group> \
+  --type console \
+  --tail 200
+
+# 5) 최근 Activity Log 확인
+az monitor activity-log list \
+  --resource-group <resource-group> \
+  --offset 1h \
+  --max-events 50 \
+  -o table
+```
+
+빠른 점검 체크포인트:
+- 컨테이너가 `0.0.0.0:8080`(또는 설정한 `containerPort`)로 실제 리슨하는지
+- `/health`가 startup 단계에서 200을 반환하는지(외부 의존성 지연 시 timeout/failureThreshold 내 응답 필요)
+- 새 이미지의 엔트리포인트/환경변수 누락 여부
 
 ---
 
@@ -280,7 +332,7 @@ az apim subscription show ... # 또는 포털 > API Management > Subscriptions >
 
 현재 스캐폴드는 **빠른 검증용** 설정입니다. 운영 전환 시 다음을 강화하세요.
 
-- **Key Vault / Storage `publicNetworkAccess`**: 현재 공개. Private Endpoint + VNet으로 제한.
+- **Key Vault `publicNetworkAccess`**: 현재 공개. Private Endpoint + VNet으로 제한.
 - **Container App ingress `external: true`**: 현재 공개. APIM/Front Door 뒤로만 노출하도록 제한.
 - **시크릿 관리**: 파라미터 평문 대신 Key Vault 참조 또는 배포 시 주입 사용. `main.dev.bicepparam`의 `replace-me`를 절대 그대로 배포하지 마세요.
 - **RBAC**: 운영자/워크로드 페르소나별 최소 권한 롤 분리.
@@ -291,8 +343,8 @@ az apim subscription show ... # 또는 포털 > API Management > Subscriptions >
 ## 8. 리소스 정리 (롤백/삭제)
 
 ```bash
-# 리소스 그룹 삭제 (그룹 내 모든 리소스 제거)
-az group delete --name lgup-rg --yes --no-wait
+# 이 스택이 만든 리소스만 삭제 (공유 리소스 그룹은 유지)
+./destroy-bicep.sh --param-file main.local.bicepparam
 ```
 
 > Key Vault는 **소프트 삭제(보존 90일)**가 켜져 있어 같은 이름으로 재배포 시 충돌할 수 있습니다. 필요 시 purge:
@@ -307,7 +359,7 @@ az group delete --name lgup-rg --yes --no-wait
 - [ ] `az login` 및 신규 구독 선택
 - [ ] 리소스 공급자 등록 완료
 - [ ] RBAC 권한(Owner / UAA) 확인
-- [ ] 파라미터 파일의 M365 / integrations 실제 값으로 교체
+- [ ] 파라미터 파일의 Copilot Studio / integrations 실제 값으로 교체
 - [ ] 시크릿을 환경변수로 준비 (`replace-me` 제거)
 - [ ] `what-if`로 사전 검증
 - [ ] `az deployment sub create`로 배포

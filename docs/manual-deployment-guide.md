@@ -1,6 +1,6 @@
 # Bicep 미사용 시 수동 배포 가이드 (Azure CLI / 포털)
 
-이 문서는 **Bicep(IaC)을 사용할 수 없는 환경**에서 `lgup-m365-mcp` 인프라를
+이 문서는 **Bicep(IaC)을 사용할 수 없는 환경**에서 이 인프라를
 **Azure CLI 명령형(imperative) 명령** 또는 **Azure 포털**로 동일하게 구축하는 방법을 설명합니다.
 
 > 기준 아키텍처는 [main.bicep](../main.bicep)와 동일합니다. 리소스 종류·역할·관계는
@@ -22,6 +22,9 @@
 ---
 
 ## 1. 변수 준비
+
+> `main.dev.bicepparam`는 샘플 파일로 유지하고, 실제 시크릿이 들어가는 값은 추적되지 않는 로컬 `.bicepparam` 파일 또는 셸 환경변수로 관리하세요.
+
 
 모든 명령에서 재사용할 변수를 셸에 정의합니다. (Bicep 명명 규칙과 동일한 결과를 내도록 구성)
 
@@ -51,7 +54,8 @@ ACR="${PREFIX}${ENV}acr${HASH}"
 APIM="${PREFIX}-${ENV}-apim-${HASH}"
 
 # --- 시크릿 (환경변수로 주입, 히스토리 주의) ---
-export M365_CLIENT_SECRET='...'
+export CLIENT_APPLICATION_SECRET='...'
+# Optional: only when the corresponding integration is used
 export NGIS_API_KEY='...'
 export DRM_API_KEY='...'
 ```
@@ -79,7 +83,7 @@ done
 
 ```bash
 az group create --name "$RG" --location "$LOCATION" \
-  --tags workload=m365-mcp environment="$ENV"
+  --tags workload=copilot-studio-mcp environment="$ENV"
 ```
 
 **포털**: 홈 > 리소스 그룹 > 만들기 > 이름/지역 입력.
@@ -150,30 +154,7 @@ KV_URI=$(az keyvault show -n "$KV" -g "$RG" --query properties.vaultUri -o tsv)
 KV_ID=$(az keyvault show -n "$KV" -g "$RG" --query id -o tsv)
 ```
 
-### 5.3 Storage Account + 컨테이너 3개
-
-```bash
-az storage account create \
-  --name "$ST" \
-  --resource-group "$RG" \
-  --location "$LOCATION" \
-  --sku Standard_LRS \
-  --kind StorageV2 \
-  --access-tier Hot \
-  --min-tls-version TLS1_2 \
-  --allow-blob-public-access false \
-  --https-only true
-
-for c in incoming-nonhwp result-hwp processing-artifacts; do
-  az storage container create \
-    --name "$c" \
-    --account-name "$ST" \
-    --auth-mode login \
-    --public-access off
-done
-```
-
-### 5.4 롤 할당: Key Vault Secrets User → UAMI
+### 5.3 (수동) Key Vault 접근 권한 부여
 
 ```bash
 az role assignment create \
@@ -199,7 +180,7 @@ ACR_ID=$(az acr show -n "$ACR" --query id -o tsv)
 ACR_LOGINSERVER=$(az acr show -n "$ACR" --query loginServer -o tsv)
 ```
 
-### 6.1 롤 할당: AcrPull → UAMI
+### 6.1 (수동) AcrPull → UAMI
 
 ```bash
 az role assignment create \
@@ -267,13 +248,22 @@ az containerapp create \
 
 > 공개(public) 이미지로 검증할 때는 `--registry-*` 옵션을 생략하세요.
 
+Container App는 `/health` 기준으로 명시적 프로브를 사용하도록 생성/유지하는 것을 권장합니다.
+- Startup: `initialDelay=10s`, `period=10s`, `timeout=5s`, `failureThreshold=30`
+- Liveness: `initialDelay=30s`, `period=30s`, `timeout=5s`, `failureThreshold=3`
+- Readiness: `initialDelay=10s`, `period=10s`, `timeout=5s`, `failureThreshold=6`
+
+CLI 수동 생성 시에도 Bicep와 동일한 프로브 설정을 적용하세요.
+
 ### 7.3 시크릿 등록
+
+`CLIENT_APPLICATION_SECRET`는 필수입니다. `NGIS_API_KEY`, `DRM_API_KEY`는 해당 연동을 사용할 때만 추가하세요.
 
 ```bash
 az containerapp secret set \
   --name "$APP" --resource-group "$RG" \
   --secrets \
-    m365-client-secret="$M365_CLIENT_SECRET" \
+    client-application-secret="$CLIENT_APPLICATION_SECRET" \
     ngis-api-key="$NGIS_API_KEY" \
     drm-api-key="$DRM_API_KEY"
 ```
@@ -286,11 +276,8 @@ az containerapp update \
   --set-env-vars \
     APPLICATIONINSIGHTS_CONNECTION_STRING="$APPI_CONN" \
     AZURE_CLIENT_ID="$UAMI_CLIENTID" \
-    M365_TENANT_ID="<tenantId>" \
-    M365_SHAREPOINT_SITE_URL="<sharePointSiteUrl>" \
-    M365_ONEDRIVE_ROOT_PATH="<oneDriveRootPath>" \
-    M365_TEAMS_TENANT_DOMAIN="<teamsTenantDomain>" \
-    M365_COPILOT_STUDIO_ENVIRONMENT="<copilotStudioEnvironment>" \
+    COPILOT_TENANT_ID="<tenantId>" \
+    COPILOT_STUDIO_ENVIRONMENT="<copilotStudioEnvironment>" \
     APIM_GATEWAY_URL="<apimGatewayUrl>" \
     NGIS_BASE_URL="<ngisBaseUrl>" \
     PSS_BASE_URL="<pssBaseUrl>" \
@@ -298,8 +285,7 @@ az containerapp update \
     CONFLUENCE_BASE_URL="<confluenceBaseUrl>" \
     DRM_API_BASE_URL="<drmApiBaseUrl>" \
     KEY_VAULT_URI="$KV_URI" \
-    STORAGE_ACCOUNT_NAME="$ST" \
-    M365_CLIENT_SECRET=secretref:m365-client-secret \
+    CLIENT_APPLICATION_SECRET=secretref:client-application-secret \
     NGIS_API_KEY=secretref:ngis-api-key \
     DRM_API_KEY=secretref:drm-api-key
 
@@ -338,11 +324,11 @@ az apim api create \
   --resource-group "$RG" \
   --service-name "$APIM" \
   --api-id mcp \
-  --display-name "Hanik MCP" \
+  --display-name "Copilot Studio MCP Integration" \
   --path "" \
   --protocols https \
   --service-url "$APP_URL" \
-  --subscription-required true
+  --subscription-required false
 ```
 
 ### 8.3 Operation 추가 (`POST /mcp`, `GET /health`)
@@ -361,7 +347,7 @@ az apim api operation create \
 
 ### 8.4 정책: 응답 버퍼링 비활성화 (MCP Streamable HTTP/SSE)
 
-CLI로 API 정책을 직접 설정하기 번거로우면 **포털 > API Management > APIs > Hanik MCP > All operations > Policies**에서 아래 XML을 붙여넣습니다.
+CLI로 API 정책을 직접 설정하기 번거로우면 **포털 > API Management > APIs > Copilot Studio MCP Integration > All operations > Policies**에서 아래 XML을 붙여넣습니다.
 
 ```xml
 <policies>
@@ -374,15 +360,23 @@ CLI로 API 정책을 직접 설정하기 번거로우면 **포털 > API Manageme
 
 > REST/CLI로 설정하려면 `az rest`로 `Microsoft.ApiManagement/service/apis/policies` 리소스를 PUT 하면 됩니다.
 
-### 8.5 구독(Subscription) 생성 및 키 조회
+### 8.5 `/mcp`에 Entra OAuth2/JWT 검증 추가
+
+APIM이 `/mcp` 호출의 Bearer 토큰을 검증하도록 설정합니다.
 
 ```bash
-# 포털: API Management > Subscriptions > 추가 (scope = mcp API)
-# 키 조회:
-az apim subscription list \
-  --resource-group "$RG" --service-name "$APIM" \
-  --query "[].{name:name, displayName:displayName}" -o table
+AUTH_CLIENT_ID="<entra-app-client-id>"
+TENANT_ID=$(az account show --query tenantId -o tsv)
+
+az apim api operation policy update \
+  --resource-group "$RG" \
+  --service-name "$APIM" \
+  --api-id mcp \
+  --operation-id post-mcp \
+  --xml-content "<policies><inbound><validate-jwt header-name=\"Authorization\" require-scheme=\"Bearer\" failed-validation-httpcode=\"401\" failed-validation-error-message=\"Unauthorized. Valid Entra bearer token required.\"><openid-config url=\"https://login.microsoftonline.com/${TENANT_ID}/v2.0/.well-known/openid-configuration\" /><audiences><audience>api://${AUTH_CLIENT_ID}</audience><audience>${AUTH_CLIENT_ID}</audience></audiences></validate-jwt><base /></inbound><backend><base /></backend><outbound><base /></outbound><on-error><base /></on-error></policies>"
 ```
+
+> 이 설정은 `/mcp`에만 적용됩니다. `/health`는 JWT 검증 없이 유지됩니다.
 
 ---
 
@@ -392,12 +386,33 @@ az apim subscription list \
 # Container App 직접 헬스 체크
 curl -s "$APP_URL/health"
 
-# APIM 경유 (구독 키 헤더 필요)
+# APIM 경유 (Entra Bearer 토큰 필요)
 curl -s -X POST "${GATEWAY_URL}/mcp" \
-  -H "Ocp-Apim-Subscription-Key: <SUBSCRIPTION_KEY>" \
+  -H "Authorization: Bearer <ENTRA_ACCESS_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
+
+### 9.1 `deploy-app.sh` 사용 시 후속 헬스 검증
+
+`deploy-app.sh`는 이미지 업데이트 직후 `/health`를 최대 약 100초(20회 × 5초 간격) 검증합니다.  
+검증 실패 시 종료 코드 1로 실패 처리하며, 아래 진단 명령을 바로 안내합니다.
+
+```bash
+az containerapp show --name "<app>" --resource-group "<rg>" -o yaml
+az containerapp revision list --name "<app>" --resource-group "<rg>" -o table
+az containerapp logs show --name "<app>" --resource-group "<rg>" --type system --tail 200
+az containerapp logs show --name "<app>" --resource-group "<rg>" --type console --tail 200
+az monitor activity-log list --resource-group "<rg>" --offset 1h --max-events 50 -o table
+```
+
+### 9.2 Startup probe 실패(ContainerTerminated) 대응 플로우
+
+1. `az containerapp show`로 `runningStatus`, `provisioningState`, `latestReadyRevisionName` 확인  
+2. `az containerapp revision list`로 실패 리비전 식별  
+3. `--type system` 로그로 probe 실패 원인(연결 실패, timeout) 확인  
+4. `--type console` 로그로 앱 초기화 에러(환경변수/시크릿/의존 API) 확인  
+5. 필요한 경우 이전 Ready 리비전으로 복구 후 이미지/설정 수정 재배포
 
 ---
 
@@ -408,10 +423,10 @@ Bicep의 모듈 의존성과 동일한 순서를 따라야 합니다.
 ```mermaid
 flowchart LR
     RG[1. Resource Group] --> OBS[2. Log Analytics + App Insights]
-    OBS --> FND[3. Identity + KeyVault + Storage]
-    FND --> ROLE1[4. KV Secrets User 롤]
+    OBS --> FND[3. Identity + KeyVault]
+    FND -.-> ROLE1[4. 수동 KV 권한]
     FND --> REG[5. ACR]
-    REG --> ROLE2[6. AcrPull 롤]
+    REG -.-> ROLE2[6. 수동 AcrPull]
     OBS --> CAE[7. Container Apps Env]
     FND --> APP[8. Container App]
     REG --> APP
@@ -422,8 +437,8 @@ flowchart LR
 | 단계 | 반드시 먼저 있어야 하는 것 |
 |------|---------------------------|
 | App Insights | Log Analytics |
-| KV Secrets User 롤 | Key Vault + UAMI |
-| AcrPull 롤 | ACR + UAMI |
+| 수동 KV 권한 | Key Vault + UAMI |
+| 수동 AcrPull | ACR + UAMI |
 | Container Apps Env | Log Analytics |
 | Container App | UAMI, ACR, Env, (App Insights 연결 문자열) |
 | API Management API | Container App URL |

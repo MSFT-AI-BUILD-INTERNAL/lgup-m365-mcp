@@ -1,0 +1,242 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.44.1.10279",
+      "templateHash": "5132052394319579365"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string"
+    },
+    "managedEnvironmentName": {
+      "type": "string"
+    },
+    "containerAppName": {
+      "type": "string"
+    },
+    "logAnalyticsWorkspaceName": {
+      "type": "string"
+    },
+    "applicationInsightsConnectionString": {
+      "type": "string"
+    },
+    "managedIdentityId": {
+      "type": "string"
+    },
+    "managedIdentityClientId": {
+      "type": "string"
+    },
+    "keyVaultUri": {
+      "type": "string"
+    },
+    "copilotStudio": {
+      "type": "object"
+    },
+    "integrations": {
+      "type": "object"
+    },
+    "clientApplicationSecret": {
+      "type": "securestring"
+    },
+    "ngisApiKey": {
+      "type": "securestring",
+      "defaultValue": ""
+    },
+    "drmApiKey": {
+      "type": "securestring",
+      "defaultValue": ""
+    },
+    "containerImage": {
+      "type": "string"
+    },
+    "containerPort": {
+      "type": "int"
+    },
+    "minReplicas": {
+      "type": "int"
+    },
+    "maxReplicas": {
+      "type": "int"
+    },
+    "containerCpu": {
+      "type": "int"
+    },
+    "containerMemory": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "object"
+    },
+    "authClientId": {
+      "type": "string",
+      "metadata": {
+        "description": "Entra ID application (client) ID used for Container Apps built-in authentication."
+      }
+    },
+    "authTenantId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Entra ID tenant ID used as the token issuer for built-in authentication."
+      }
+    },
+    "containerRegistryServer": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Login server of the container registry the workload identity pulls from. Empty for public images."
+      }
+    }
+  },
+  "variables": {
+    "containerAppSecrets": "[concat(createArray(createObject('name', 'client-application-secret', 'value', parameters('clientApplicationSecret'))), if(empty(parameters('ngisApiKey')), createArray(), createArray(createObject('name', 'ngis-api-key', 'value', parameters('ngisApiKey')))), if(empty(parameters('drmApiKey')), createArray(), createArray(createObject('name', 'drm-api-key', 'value', parameters('drmApiKey')))))]",
+    "containerAppEnv": "[concat(createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', parameters('applicationInsightsConnectionString')), createObject('name', 'AZURE_CLIENT_ID', 'value', parameters('managedIdentityClientId')), createObject('name', 'COPILOT_TENANT_ID', 'value', parameters('copilotStudio').tenantId), createObject('name', 'COPILOT_STUDIO_ENVIRONMENT', 'value', parameters('copilotStudio').copilotStudioEnvironment), createObject('name', 'APIM_GATEWAY_URL', 'value', parameters('integrations').apimGatewayUrl), createObject('name', 'NGIS_BASE_URL', 'value', parameters('integrations').ngisBaseUrl), createObject('name', 'PSS_BASE_URL', 'value', parameters('integrations').pssBaseUrl), createObject('name', 'TIRO_BASE_URL', 'value', parameters('integrations').tiroBaseUrl), createObject('name', 'CONFLUENCE_BASE_URL', 'value', parameters('integrations').confluenceBaseUrl), createObject('name', 'DRM_API_BASE_URL', 'value', parameters('integrations').drmApiBaseUrl), createObject('name', 'KEY_VAULT_URI', 'value', parameters('keyVaultUri')), createObject('name', 'CLIENT_APPLICATION_SECRET', 'secretRef', 'client-application-secret')), if(empty(parameters('ngisApiKey')), createArray(), createArray(createObject('name', 'NGIS_API_KEY', 'secretRef', 'ngis-api-key'))), if(empty(parameters('drmApiKey')), createArray(), createArray(createObject('name', 'DRM_API_KEY', 'secretRef', 'drm-api-key'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.App/managedEnvironments",
+      "apiVersion": "2023-05-01",
+      "name": "[parameters('managedEnvironmentName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "properties": {
+        "appLogsConfiguration": {
+          "destination": "log-analytics",
+          "logAnalyticsConfiguration": {
+            "customerId": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName')), '2023-09-01').customerId]",
+            "sharedKey": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName')), '2023-09-01').primarySharedKey]"
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2023-05-01",
+      "name": "[parameters('containerAppName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[format('{0}', parameters('managedIdentityId'))]": {}
+        }
+      },
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', parameters('managedEnvironmentName'))]",
+        "configuration": {
+          "ingress": {
+            "external": true,
+            "targetPort": "[parameters('containerPort')]",
+            "transport": "auto"
+          },
+          "registries": "[if(empty(parameters('containerRegistryServer')), createArray(), createArray(createObject('server', parameters('containerRegistryServer'), 'identity', parameters('managedIdentityId'))))]",
+          "secrets": "[variables('containerAppSecrets')]"
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "mcp-api",
+              "image": "[parameters('containerImage')]",
+              "env": "[variables('containerAppEnv')]",
+              "resources": {
+                "cpu": "[parameters('containerCpu')]",
+                "memory": "[parameters('containerMemory')]"
+              },
+              "probes": [
+                {
+                  "type": "Startup",
+                  "httpGet": {
+                    "path": "/health",
+                    "port": "[parameters('containerPort')]"
+                  },
+                  "initialDelaySeconds": 5,
+                  "periodSeconds": 5,
+                  "timeoutSeconds": 5,
+                  "failureThreshold": 60
+                },
+                {
+                  "type": "Liveness",
+                  "httpGet": {
+                    "path": "/health",
+                    "port": "[parameters('containerPort')]"
+                  },
+                  "initialDelaySeconds": 0,
+                  "periodSeconds": 30,
+                  "timeoutSeconds": 10,
+                  "failureThreshold": 5
+                },
+                {
+                  "type": "Readiness",
+                  "httpGet": {
+                    "path": "/health",
+                    "port": "[parameters('containerPort')]"
+                  },
+                  "initialDelaySeconds": 0,
+                  "periodSeconds": 10,
+                  "timeoutSeconds": 5,
+                  "failureThreshold": 10
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": "[parameters('minReplicas')]",
+            "maxReplicas": "[parameters('maxReplicas')]"
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', parameters('managedEnvironmentName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/containerApps/authConfigs",
+      "apiVersion": "2024-03-01",
+      "name": "[format('{0}/{1}', parameters('containerAppName'), 'current')]",
+      "properties": {
+        "platform": {
+          "enabled": true
+        },
+        "globalValidation": {
+          "unauthenticatedClientAction": "AllowAnonymous"
+        },
+        "identityProviders": {
+          "azureActiveDirectory": {
+            "enabled": true,
+            "registration": {
+              "openIdIssuer": "[format('https://login.microsoftonline.com/{0}/v2.0', parameters('authTenantId'))]",
+              "clientId": "[parameters('authClientId')]"
+            },
+            "validation": {
+              "allowedAudiences": [
+                "[format('api://{0}', parameters('authClientId'))]",
+                "[parameters('authClientId')]"
+              ]
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/containerApps', parameters('containerAppName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "containerAppName": {
+      "type": "string",
+      "value": "[parameters('containerAppName')]"
+    },
+    "containerAppUrl": {
+      "type": "string",
+      "value": "[format('https://{0}', reference(resourceId('Microsoft.App/containerApps', parameters('containerAppName')), '2023-05-01').configuration.ingress.fqdn)]"
+    },
+    "managedEnvironmentId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.App/managedEnvironments', parameters('managedEnvironmentName'))]"
+    }
+  }
+}

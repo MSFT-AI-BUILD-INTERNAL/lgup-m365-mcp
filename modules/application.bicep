@@ -8,15 +8,12 @@ param applicationInsightsConnectionString string
 param managedIdentityId string
 param managedIdentityClientId string
 param keyVaultUri string
-param storageAccountName string
-param m365 object
+param copilotStudio object
 param integrations object
 @secure()
-param m365ClientSecret string
+param ngisApiKey string = ''
 @secure()
-param ngisApiKey string
-@secure()
-param drmApiKey string
+param drmApiKey string = ''
 param containerImage string
 param containerPort int
 param minReplicas int
@@ -25,8 +22,12 @@ param containerCpu int
 param containerMemory string
 param tags object
 
-@description('Entra ID application (client) ID used for Container Apps built-in authentication. Empty disables auth.')
-param authClientId string = ''
+@description('Entra ID application (client) ID used for Container Apps built-in authentication.')
+param authClientId string
+
+@secure()
+@description('Entra ID application client secret returned by the Dynamic Client Registration endpoint.')
+param authClientSecret string = ''
 
 @description('Entra ID tenant ID used as the token issuer for built-in authentication.')
 param authTenantId string = ''
@@ -37,6 +38,93 @@ param containerRegistryServer string = ''
 resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' existing = {
   name: logAnalyticsWorkspaceName
 }
+
+var containerAppSecrets = concat(empty(authClientSecret) ? [] : [
+  {
+    name: 'auth-client-secret'
+    value: authClientSecret
+  }
+], empty(ngisApiKey) ? [] : [
+  {
+    name: 'ngis-api-key'
+    value: ngisApiKey
+  }
+], empty(drmApiKey) ? [] : [
+  {
+    name: 'drm-api-key'
+    value: drmApiKey
+  }
+])
+
+var containerAppEnv = concat([
+  {
+    name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+    value: applicationInsightsConnectionString
+  }
+  {
+    name: 'AZURE_CLIENT_ID'
+    value: managedIdentityClientId
+  }
+  {
+    name: 'AUTH_CLIENT_ID'
+    value: authClientId
+  }
+  {
+    name: 'AUTH_TENANT_ID'
+    value: authTenantId
+  }
+  {
+    name: 'COPILOT_TENANT_ID'
+    value: copilotStudio.tenantId
+  }
+  {
+    name: 'COPILOT_STUDIO_ENVIRONMENT'
+    value: copilotStudio.copilotStudioEnvironment
+  }
+  {
+    name: 'APIM_GATEWAY_URL'
+    value: integrations.apimGatewayUrl
+  }
+  {
+    name: 'NGIS_BASE_URL'
+    value: integrations.ngisBaseUrl
+  }
+  {
+    name: 'PSS_BASE_URL'
+    value: integrations.pssBaseUrl
+  }
+  {
+    name: 'TIRO_BASE_URL'
+    value: integrations.tiroBaseUrl
+  }
+  {
+    name: 'CONFLUENCE_BASE_URL'
+    value: integrations.confluenceBaseUrl
+  }
+  {
+    name: 'DRM_API_BASE_URL'
+    value: integrations.drmApiBaseUrl
+  }
+  {
+    name: 'KEY_VAULT_URI'
+    value: keyVaultUri
+  }
+], empty(authClientSecret) ? [] : [
+  {
+    name: 'AUTH_CLIENT_SECRET'
+    secretRef: 'auth-client-secret'
+  }
+], empty(ngisApiKey) ? [] : [
+  {
+    name: 'NGIS_API_KEY'
+    secretRef: 'ngis-api-key'
+  }
+], empty(drmApiKey) ? [] : [
+  {
+    name: 'DRM_API_KEY'
+    secretRef: 'drm-api-key'
+  }
+])
 
 resource managedEnvironment 'Microsoft.App/managedEnvironments@2023-05-01' = {
   name: managedEnvironmentName
@@ -77,104 +165,53 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
           identity: managedIdentityId
         }
       ]
-      secrets: [
-        {
-          name: 'm365-client-secret'
-          value: m365ClientSecret
-        }
-        {
-          name: 'ngis-api-key'
-          value: ngisApiKey
-        }
-        {
-          name: 'drm-api-key'
-          value: drmApiKey
-        }
-      ]
+      secrets: containerAppSecrets
     }
     template: {
       containers: [
         {
           name: 'mcp-api'
           image: containerImage
-          env: [
-            {
-              name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
-              value: applicationInsightsConnectionString
-            }
-            {
-              name: 'AZURE_CLIENT_ID'
-              value: managedIdentityClientId
-            }
-            {
-              name: 'M365_TENANT_ID'
-              value: m365.tenantId
-            }
-            {
-              name: 'M365_SHAREPOINT_SITE_URL'
-              value: m365.sharePointSiteUrl
-            }
-            {
-              name: 'M365_ONEDRIVE_ROOT_PATH'
-              value: m365.oneDriveRootPath
-            }
-            {
-              name: 'M365_TEAMS_TENANT_DOMAIN'
-              value: m365.teamsTenantDomain
-            }
-            {
-              name: 'M365_COPILOT_STUDIO_ENVIRONMENT'
-              value: m365.copilotStudioEnvironment
-            }
-            {
-              name: 'APIM_GATEWAY_URL'
-              value: integrations.apimGatewayUrl
-            }
-            {
-              name: 'NGIS_BASE_URL'
-              value: integrations.ngisBaseUrl
-            }
-            {
-              name: 'PSS_BASE_URL'
-              value: integrations.pssBaseUrl
-            }
-            {
-              name: 'TIRO_BASE_URL'
-              value: integrations.tiroBaseUrl
-            }
-            {
-              name: 'CONFLUENCE_BASE_URL'
-              value: integrations.confluenceBaseUrl
-            }
-            {
-              name: 'DRM_API_BASE_URL'
-              value: integrations.drmApiBaseUrl
-            }
-            {
-              name: 'KEY_VAULT_URI'
-              value: keyVaultUri
-            }
-            {
-              name: 'STORAGE_ACCOUNT_NAME'
-              value: storageAccountName
-            }
-            {
-              name: 'M365_CLIENT_SECRET'
-              secretRef: 'm365-client-secret'
-            }
-            {
-              name: 'NGIS_API_KEY'
-              secretRef: 'ngis-api-key'
-            }
-            {
-              name: 'DRM_API_KEY'
-              secretRef: 'drm-api-key'
-            }
-          ]
+          env: containerAppEnv
           resources: {
             cpu: containerCpu
             memory: containerMemory
           }
+          probes: [
+            {
+              type: 'Startup'
+              httpGet: {
+                path: '/health'
+                port: containerPort
+              }
+              initialDelaySeconds: 5
+              periodSeconds: 5
+              timeoutSeconds: 5
+              failureThreshold: 60
+            }
+            {
+              type: 'Liveness'
+              httpGet: {
+                path: '/health'
+                port: containerPort
+              }
+              initialDelaySeconds: 0
+              periodSeconds: 30
+              timeoutSeconds: 10
+              failureThreshold: 5
+            }
+            {
+              type: 'Readiness'
+              httpGet: {
+                path: '/health'
+                port: containerPort
+              }
+              initialDelaySeconds: 0
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 10
+            }
+          ]
         }
       ]
       scale: {
@@ -192,8 +229,8 @@ output managedEnvironmentId string = managedEnvironment.id
 // Built-in authentication (Easy Auth) with Entra ID.
 // AllowAnonymous keeps the endpoint reachable while forwarding the caller's
 // identity (x-ms-client-principal* headers) to the backend whenever a valid
-// bearer token is presented. Only created when an auth client ID is supplied.
-resource authConfig 'Microsoft.App/containerApps/authConfigs@2024-03-01' = if (!empty(authClientId)) {
+// bearer token is presented.
+resource authConfig 'Microsoft.App/containerApps/authConfigs@2024-03-01' = {
   parent: containerApp
   name: 'current'
   properties: {

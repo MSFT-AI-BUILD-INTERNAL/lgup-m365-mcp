@@ -1,7 +1,7 @@
 # Azure 구현 로드맵 — DRM 복호화 · 슬기 연동 (lgup-m365-mcp)
 
 > 아키텍처 다이어그램의 **Azure 영역**(MCP/API 진입점 · DRM 호출 · 인증/키 관리 · 상암 데이터센터망/슬기 API 연동)을 실제로 구현하기 위한 단계별 로드맵.
-> 기준 다이어그램: M365 ↔ Azure ↔ 상암 DC · 기준 코드: `main.bicep`, `app/src/index.ts` · 작성일 2026-06-28
+> 기준 다이어그램: Client applications ↔ Azure ↔ 상암 DC · 기준 코드: `main.bicep`, `app/src/index.ts` · 작성일 2026-06-28
 
 상태 범례: ✅ 완료 · 🟡 부분(배선만) · 🔴 없음
 
@@ -9,14 +9,14 @@
 
 ## 0. 요약
 
-인프라 뼈대(Container Apps · ACR · Key Vault · Storage · APIM · 관측성 · Easy Auth)는 **약 70% 완성**. 다이어그램이 요구하는 **실제 업무 기능**(DRM 복호화 파이프라인, OneDrive 파일 왕복, 상암 DC 슬기 API 연동, 온프레미스 네트워킹)은 **거의 미구현(0%)**.
+인프라 뼈대(Container Apps · ACR · Key Vault · Storage · APIM · 관측성 · Easy Auth)는 **약 70% 완성**. 다이어그램이 요구하는 **실제 업무 기능**(DRM 복호화 파이프라인, 클라이언트 파일 전달, 상암 DC 슬기 API 연동, 온프레미스 네트워킹)은 **거의 미구현(0%)**.
 
 | 책임 영역(다이어그램) | 상태 | 핵심 부족분 |
 |---|---|---|
 | MCP/API 진입점 | 🟡 | 복호화 요청 툴/엔드포인트 없음, MCP vs REST 미결 |
 | DRM 호출(복호화) | 🔴 | DRM 클라이언트 코드·스펙 없음 |
 | 인증/키 관리 | 🟡 | Key Vault 런타임 조회·OBO 흐름 없음 |
-| OneDrive 파일 반환 | 🔴 | Microsoft Graph 연동 없음 |
+| 클라이언트 파일 반환 | 🔴 | 클라이언트 파일 전달 연동 없음 |
 | 상암 DC / 슬기 API | 🔴 | 온프레미스 연결·클라이언트 전무 |
 
 ---
@@ -25,13 +25,13 @@
 
 ```mermaid
 flowchart LR
-  U([사용자]) -->|"① Non-HWP 업로드 / DRM 복호화 요청"| CS[Copilot Studio]
+  U([사용자]) -->|"① Non-HWP 업로드 / DRM 복호화 요청"| CS[Copilot Studio Agent]
   CS -->|"② MCP / API 호출"| MCP{{"Azure: MCP/API 진입점"}}
   U -.->|"DRM 복호화 요청(직접)"| MCP
   MCP -->|"③ DRM 호출"| DRM[DRM 복호화]
   MCP -->|"인증/키 조회"| KV[(인증/키 관리 · Key Vault)]
   DRM -->|"④ 복호화된 HWP"| MCP
-  MCP -->|"⑤ 복호화된 HWP 반환"| OD[OneDrive 개인]
+  MCP -->|"⑤ 복호화된 HWP 반환"| CA[Client Application]
   MCP ==>|"⑥ MCP / API 호출"| SADC[[상암 데이터센터망]]
   SADC ==> SG[슬기 API / MCP]
 ```
@@ -46,12 +46,13 @@ flowchart LR
 |---|---|---|---|
 | 오케스트레이션 | `main.bicep` | ✅ | RG·모듈 배선 완비 |
 | 관측성 | `modules/observability.bicep` | ✅ | Log Analytics + App Insights |
-| 플랫폼 기반 | `modules/platform-foundation.bicep` | ✅ | UAMI · Key Vault · Storage(3 컨테이너) |
-| 레지스트리 | `modules/registry.bicep` | ✅ | ACR + AcrPull RBAC |
+| 플랫폼 기반 | `modules/platform-foundation.bicep` | ✅ | UAMI |
+| Key Vault 접근 | `modules/key-vault-access.bicep` | ✅ | 기존 KV 참조 |
+| 레지스트리 | `modules/registry.bicep` | ✅ | 기존 ACR 참조 |
 | 애플리케이션 | `modules/application.bicep` | ✅ | Container Apps + Easy Auth + 시크릿 주입 |
 | 게이트웨이 | `modules/gateway.bicep` | 🟡 | APIM Consumption(공인망). 사내망 도달 불가 |
 | MCP 서버 앱 | `app/src/index.ts` | 🔴(골격) | 툴 2개(`test_hanik`, `get_current_user`)뿐 |
-| 스토리지 컨테이너 | `incoming-nonhwp` · `processing-artifacts` · `result-hwp` | ✅ | 버킷만 준비(로직 없음) |
+| 스토리지 컨테이너 | — | ⚪ | 현재 스택에서 제거됨(Blob 파이프라인 미구현) |
 | DRM 배선 | `DRM_API_BASE_URL` · `drm-api-key` | 🟡 | env/시크릿만 주입, 호출 코드 없음 |
 | 네트워킹 | — | 🔴 | VNet/PE/온프레미스 연결 전무 |
 | 문서 | `docs/*-deployment-guide.*` | 🟡 | 인프라 배포 중심, DRM/슬기 흐름 미반영 |
@@ -72,7 +73,7 @@ flowchart LR
 
 ### C. 인증/키 관리
 - 자격증명이 env 시크릿 주입에 의존 — **Key Vault 런타임 조회 코드 없음**.
-- Copilot Studio → Azure 사용자 토큰 전달/OBO 흐름 미설계.
+- Copilot Studio Agent / Client Application → Azure 사용자 토큰 전달/OBO 흐름 미설계.
 - 운영자/워크로드 RBAC 분리, 키 로테이션 없음.
 
 ### D. 상암 데이터센터망 / 슬기 API ⚠️ 최대 리스크
@@ -102,7 +103,7 @@ flowchart LR
 |---|---|---|---|
 | 1-1 | `decrypt_file` 복호화 MCP 툴/REST 엔드포인트 추가 | `app/src/index.ts` | 0-1 |
 | 1-2 | DRM 호출 클라이언트 구현(Key Vault 키 조회) | app | 0-2, 1-5 |
-| 1-3 | Microsoft Graph 연동: OneDrive 다운로드/업로드 | app | 0-4 |
+| 1-3 | Client Application 파일 전달 연동 | app | 0-4 |
 | 1-4 | Blob 스테이징 파이프라인(`incoming → processing → result`) | app | 0-4 |
 | 1-5 | Key Vault 런타임 시크릿 조회(SDK/관리 ID) | app | — |
 | 1-6 | 슬기 API/MCP 아웃바운드 클라이언트 | app | 0-3, 2-2 |
@@ -146,7 +147,7 @@ flowchart LR
 | Q1 | 진입점을 MCP 툴 / REST / 둘 다 중 무엇으로? | 앱·APIM·커넥터 구조 | 아키텍트 |
 | Q2 | DRM API 스펙(인증·포맷·동기성·파일전달)? | Phase 1 전체 | DRM 팀 |
 | Q3 | 상암 DC 연결을 ExpressRoute / S2S VPN 중 무엇으로? | Phase 2 전체·비용 | 네트워크 팀 |
-| Q4 | 복호화 결과 반환 경로: OneDrive 직접 / Blob 링크? | Graph 권한 모델 | 아키텍트 |
+| Q4 | 복호화 결과 반환 경로: Client Application 직접 / Blob 링크? | 클라이언트 권한 모델 | 아키텍트 |
 | Q5 | 슬기 API 연동 트리거 시점(복호화 전/후/병렬)? | 파이프라인 순서 | 업무 담당 |
 | Q6 | 대용량·장시간 작업 시 동기 vs 비동기? | 1-1·1-7 설계 | 아키텍트 |
 
@@ -160,7 +161,7 @@ flowchart LR
 | DRM/슬기 스펙 미확보 | 높음 | 목 인터페이스로 Phase 1 병행, 계약서 우선 확정 |
 | 민감정보(복호화 파일) 유출 | 높음 | Private Endpoint·암호화·짧은 보존주기·감사 로깅 |
 | APIM Consumption 한계 | 중간 | VNet 통합 가능 티어로 조기 전환 |
-| OneDrive Graph 권한 과다 | 중간 | 최소 권한 스코프·폴더 한정 위임 |
+| 클라이언트 파일 전달 권한 모델 복잡도 | 중간 | 최소 권한·짧은 수명 링크·감사 로깅 적용 |
 
 ---
 
@@ -174,7 +175,7 @@ gantt
   section Phase 0 설계
   진입점/DRM/슬기/네트워크 결정      :p0, 2026-06-30, 14d
   section Phase 1 업무 로직
-  복호화 툴 + DRM/Graph/Blob        :p1, after p0, 21d
+  복호화 툴 + DRM/Client/Blob        :p1, after p0, 21d
   슬기 아웃바운드 클라이언트        :p1b, after p1, 10d
   section Phase 2 네트워킹/보안
   VNet/PE/온프레미스 연결          :p2, after p0, 21d

@@ -7,6 +7,13 @@ param publisherName string
 
 @description('Base URL of the Container App backend, e.g. https://app.region.azurecontainerapps.io')
 param containerAppUrl string
+
+@description('Entra ID application (client) ID whose audience is accepted by APIM.')
+param authClientId string
+
+@description('Entra ID tenant ID used by APIM to resolve OpenID metadata.')
+param authTenantId string = ''
+
 param tags object
 
 // API Management in Consumption tier: serverless gateway, pay-per-call, fast to provision.
@@ -31,17 +38,13 @@ resource api 'Microsoft.ApiManagement/service/apis@2022-08-01' = {
   parent: apim
   name: 'mcp'
   properties: {
-    displayName: 'Hanik MCP'
+    displayName: 'Copilot Studio MCP Integration'
     path: ''
     protocols: [
       'https'
     ]
     serviceUrl: containerAppUrl
-    subscriptionRequired: true
-    subscriptionKeyParameterNames: {
-      header: 'Ocp-Apim-Subscription-Key'
-      query: 'subscription-key'
-    }
+    subscriptionRequired: false
   }
 }
 
@@ -65,6 +68,15 @@ resource opPostMcp 'Microsoft.ApiManagement/service/apis/operations@2022-08-01' 
   }
 }
 
+resource opPostMcpPolicy 'Microsoft.ApiManagement/service/apis/operations/policies@2022-08-01' = {
+  parent: opPostMcp
+  name: 'policy'
+  properties: {
+    format: 'xml'
+    value: '<policies><inbound><validate-jwt header-name="Authorization" require-scheme="Bearer" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized. Valid Entra bearer token required."><openid-config url="https://login.microsoftonline.com/${authTenantId}/v2.0/.well-known/openid-configuration" /><audiences><audience>api://${authClientId}</audience><audience>${authClientId}</audience></audiences><required-claims><claim name="scp" match="any"><value>access_as_user</value></claim></required-claims></validate-jwt><base /></inbound><backend><base /></backend><outbound><base /></outbound><on-error><base /></on-error></policies>'
+  }
+}
+
 resource opHealth 'Microsoft.ApiManagement/service/apis/operations@2022-08-01' = {
   parent: api
   name: 'get-health'
@@ -75,16 +87,27 @@ resource opHealth 'Microsoft.ApiManagement/service/apis/operations@2022-08-01' =
   }
 }
 
-resource sub 'Microsoft.ApiManagement/service/subscriptions@2022-08-01' = {
-  parent: apim
-  name: 'mcp-subscription'
+// RFC 9728 — OAuth Protected Resource Metadata (unauthenticated, for Copilot Studio Dynamic discovery).
+resource opWellKnown 'Microsoft.ApiManagement/service/apis/operations@2022-08-01' = {
+  parent: api
+  name: 'get-oauth-protected-resource'
   properties: {
-    displayName: 'MCP Subscription'
-    scope: api.id
-    state: 'active'
+    displayName: 'OAuth Protected Resource Metadata'
+    method: 'GET'
+    urlTemplate: '/.well-known/oauth-protected-resource'
+  }
+}
+
+// RFC 8414 — OAuth Authorization Server Metadata (unauthenticated).
+resource opAuthServerMeta 'Microsoft.ApiManagement/service/apis/operations@2022-08-01' = {
+  parent: api
+  name: 'get-oauth-authorization-server'
+  properties: {
+    displayName: 'OAuth Authorization Server Metadata'
+    method: 'GET'
+    urlTemplate: '/.well-known/oauth-authorization-server'
   }
 }
 
 output gatewayUrl string = apim.properties.gatewayUrl
 output apimName string = apim.name
-output subscriptionName string = sub.name

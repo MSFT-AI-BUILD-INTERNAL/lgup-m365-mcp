@@ -3,19 +3,17 @@ using './main.bicep'
 param namePrefix = 'lgmcp'
 param environmentName = 'dev'
 param location = 'koreacentral'
+param resourceGroupName = 'lgup-rg'
 
 param tags = {
-  workload: 'm365-mcp'
+  workload: 'copilot-studio-mcp'
   owner: 'platform-team'
   costCenter: 'tbd'
 }
 
-param m365 = {
-  tenantId: '00000000-0000-0000-0000-000000000000'
-  sharePointSiteUrl: 'https://example.sharepoint.com/sites/fieldops'
-  oneDriveRootPath: '/Documents/Incoming'
-  teamsTenantDomain: 'example.onmicrosoft.com'
-  copilotStudioEnvironment: 'default-dev'
+param copilotStudio = {
+  tenantId: 'd0a0ff17-cf70-4fc6-b2b9-ad659ff82b30'
+  copilotStudioEnvironment: 'dev-kor-6a392e5f'
 }
 
 param integrations = {
@@ -34,11 +32,10 @@ param maxReplicas = 2
 param containerCpu = 1
 param containerMemory = '2Gi'
 
-param m365ClientSecret = 'replace-me'
 param ngisApiKey = 'replace-me'
 param drmApiKey = 'replace-me'
 
 param apimPublisherEmail = 'admin@example.com'
 param apimPublisherName = 'LGUP MCP'
 
-param authClientId = '92ad2fc4-e344-423f-b312-849420011273'
+param authClientId = 'c33af128-ff89-43c8-9d00-fec530e86e0d'

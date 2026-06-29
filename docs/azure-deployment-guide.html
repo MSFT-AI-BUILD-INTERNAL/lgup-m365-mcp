@@ -311,10 +311,9 @@
           <h2>2. 리소스 관계도</h2>
           <div class="mermaid">
 flowchart TB
-    subgraph M365["Microsoft 365 (외부)"]
-        CS[Copilot Studio]
-        SP[SharePoint / OneDrive]
-        TM[Teams / Outlook]
+    subgraph CLIENT["Client applications (external)"]
+        CS[Copilot Studio Agent]
+        CA[Client Application]
     end
 
     subgraph ENT["엔터프라이즈 시스템 (외부)"]
@@ -341,6 +340,7 @@ flowchart TB
     end
 
     CS -->|호출| APIM
+    CA -->|호출| APIM
     APIM -->|"/mcp, /health"| APP
     APP -.->|UAMI 인증| UAMI
     UAMI -->|Secrets User| KV
@@ -351,8 +351,6 @@ flowchart TB
     APP -->|추적| APPI
     APPI --> LAW
     CAE -->|appLogs| LAW
-    APP -->|연동| SP
-    APP -->|연동| TM
     APP -->|연동| NGIS
     APP -->|연동| PSS
     APP -->|연동| TIRO
@@ -385,7 +383,7 @@ flowchart LR
               <tr><td>Bicep CLI</td><td><code>az bicep upgrade</code>로 최신화</td></tr>
               <tr><td>권한</td><td>신규 구독에 <strong>Owner</strong> 또는 <strong>Contributor + User Access Administrator</strong> (롤 할당 생성 때문에 RBAC 쓰기 권한 필수)</td></tr>
               <tr><td>구독</td><td>배포 대상 신규 Azure 구독 ID</td></tr>
-              <tr><td>시크릿 값</td><td><code>m365ClientSecret</code>, <code>ngisApiKey</code>, <code>drmApiKey</code> 실제 값</td></tr>
+              <tr><td>시크릿 값</td><td><code>clientApplicationSecret</code>, <code>ngisApiKey</code>, <code>drmApiKey</code> 실제 값</td></tr>
             </tbody>
           </table>
           <div class="callout">
@@ -421,9 +419,9 @@ done
 az provider show -n Microsoft.App --query registrationState -o tsv</code></pre>
 
           <h3>4.3 파라미터 파일 준비</h3>
-          <p><code>main.dev.bicepparam</code>를 복사해 환경에 맞게 수정합니다. (시크릿은 평문 저장 대신 4.4의 인라인 주입 권장)</p>
-          <pre><code>cp main.dev.bicepparam main.prod.bicepparam</code></pre>
-          <p>수정 대상: <code>location</code>, <code>namePrefix</code>, <code>environmentName</code>, <code>m365</code> 블록(테넌트/SharePoint/OneDrive/Teams/Copilot Studio),
+          <p><code>main.dev.bicepparam</code>는 체크인되는 샘플 파일입니다. 실제 환경값이 필요한 경우 로컬의 추적되지 않는 파일(예: <code>main.local.bicepparam</code>)로 복사해 사용하고, 시크릿은 평문 저장 대신 4.4의 인라인 주입을 권장합니다.</p>
+          <pre><code>cp main.dev.bicepparam main.local.bicepparam</code></pre>
+          <p>수정 대상: <code>location</code>, <code>namePrefix</code>, <code>environmentName</code>, <code>copilotStudio</code> 블록(테넌트/Copilot Studio 환경),
           <code>integrations</code> 블록(NGIS/PSS/Tiro/Confluence/DRM/APIM), <code>containerImage</code>, <code>apimPublisherEmail</code>, <code>apimPublisherName</code>.</p>
 
           <h3>4.4 What-If 사전 검증</h3>
@@ -431,13 +429,13 @@ az provider show -n Microsoft.App --query registrationState -o tsv</code></pre>
   --name lgup-mcp-whatif \
   --location koreacentral \
   --template-file main.bicep \
-  --parameters main.dev.bicepparam \
+  --parameters main.local.bicepparam \
   --parameters \
-      m365ClientSecret="$M365_CLIENT_SECRET" \
+      clientApplicationSecret="$CLIENT_APPLICATION_SECRET" \
       ngisApiKey="$NGIS_API_KEY" \
       drmApiKey="$DRM_API_KEY"</code></pre>
           <div class="callout">
-            시크릿은 셸 환경변수로 주입하세요. 예: <code>export M365_CLIENT_SECRET='...'</code> (히스토리에 남지 않도록 주의)
+            시크릿은 셸 환경변수로 주입하세요. 예: <code>export CLIENT_APPLICATION_SECRET='...'</code> (히스토리에 남지 않도록 주의)
           </div>
 
           <h3>4.5 배포 실행</h3>
@@ -445,9 +443,9 @@ az provider show -n Microsoft.App --query registrationState -o tsv</code></pre>
   --name lgup-mcp-deploy \
   --location koreacentral \
   --template-file main.bicep \
-  --parameters main.dev.bicepparam \
+  --parameters main.local.bicepparam \
   --parameters \
-      m365ClientSecret="$M365_CLIENT_SECRET" \
+      clientApplicationSecret="$CLIENT_APPLICATION_SECRET" \
       ngisApiKey="$NGIS_API_KEY" \
       drmApiKey="$DRM_API_KEY"</code></pre>
           <div class="callout info">
@@ -477,10 +475,10 @@ az deployment sub create \
   --name lgup-mcp-deploy \
   --location koreacentral \
   --template-file main.bicep \
-  --parameters main.dev.bicepparam \
+  --parameters main.local.bicepparam \
   --parameters containerImage="${ACR_NAME}.azurecr.io/hanik-mcp-server:1.0.0" \
   --parameters \
-      m365ClientSecret="$M365_CLIENT_SECRET" \
+      clientApplicationSecret="$CLIENT_APPLICATION_SECRET" \
       ngisApiKey="$NGIS_API_KEY" \
       drmApiKey="$DRM_API_KEY"</code></pre>
           <div class="callout info">
@@ -494,8 +492,11 @@ az deployment sub create \
 APP_URL=$(az deployment sub show -n lgup-mcp-deploy \
   --query "properties.outputs.containerAppUrl.value" -o tsv)
 curl -s "$APP_URL/health"</code></pre>
-          <p>APIM은 <code>subscriptionRequired: true</code>이므로 <code>/mcp</code> 호출 시 <code>Ocp-Apim-Subscription-Key</code> 헤더가 필요합니다.
-          구독 키는 포털 또는 CLI(<code>az apim subscription</code>)로 조회합니다.</p>
+          <p>APIM은 <code>/mcp</code> 호출 시 Entra Bearer 토큰을 요구합니다. <code>authClientId</code>는 필수이며 APIM이 OpenID metadata를 사용해 audience를 검증합니다.</p>
+          <pre><code>curl -X POST "$APIM_GATEWAY_URL/mcp" \
+  -H "Authorization: Bearer &lt;ENTRA_ACCESS_TOKEN&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'</code></pre>
         </section>
 
         <section id="security">
