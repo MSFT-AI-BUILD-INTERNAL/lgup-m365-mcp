@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Azure 구현 로드맵 — DRM 복호화 · 슬기 연동 (lgup-m365-mcp)</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --panel-soft: #f8fafc;
+      --ink: #172033;
+      --muted: #64748b;
+      --line: #d9e2ef;
+      --blue: #2563eb;
+      --blue-soft: #dbeafe;
+      --green: #15803d;
+      --green-soft: #dcfce7;
+      --amber: #b45309;
+      --amber-soft: #fef3c7;
+      --red: #b91c1c;
+      --red-soft: #fee2e2;
+      --code-bg: #0f172a;
+      --code-ink: #e2e8f0;
+      --shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+      --radius: 10px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", sans-serif;
+      line-height: 1.65;
+    }
+
+    a { color: var(--blue); }
+
+    .page { width: min(1100px, calc(100% - 32px)); margin: 24px auto 64px; }
+
+    header {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 32px;
+      margin-bottom: 24px;
+    }
+
+    .eyebrow {
+      color: var(--amber);
+      font-size: 0.82rem;
+      font-weight: 800;
+      margin: 0 0 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); line-height: 1.1; margin: 0 0 12px; }
+
+    .lead { color: var(--muted); font-size: 1.05rem; max-width: 820px; margin: 0; }
+
+    .meta-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+    .chip {
+      font-size: 0.78rem; font-weight: 700; padding: 4px 10px; border-radius: 999px;
+      background: var(--blue-soft); color: #1e3a8a; border: 1px solid #bfdbfe;
+    }
+
+    .layout { display: grid; grid-template-columns: 250px 1fr; gap: 24px; align-items: start; }
+
+    nav.toc {
+      position: sticky;
+      top: 20px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px;
+      font-size: 0.9rem;
+    }
+    nav.toc strong {
+      display: block; margin-bottom: 10px; font-size: 0.78rem;
+      text-transform: uppercase; color: var(--muted); letter-spacing: 0.04em;
+    }
+    nav.toc ol { margin: 0; padding-left: 18px; }
+    nav.toc li { margin: 6px 0; }
+    nav.toc a { text-decoration: none; }
+    nav.toc a:hover { text-decoration: underline; }
+
+    main { min-width: 0; }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 26px 30px;
+      margin-bottom: 22px;
+    }
+    section h2 {
+      margin-top: 0; font-size: 1.4rem;
+      border-bottom: 2px solid var(--amber-soft); padding-bottom: 8px;
+    }
+    section h3 { font-size: 1.08rem; margin: 22px 0 8px; }
+    p { margin: 10px 0; }
+
+    table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 0.92rem; }
+    th, td { border: 1px solid var(--line); padding: 8px 11px; text-align: left; vertical-align: top; }
+    th { background: var(--panel-soft); font-weight: 700; }
+    tbody tr:nth-child(even) { background: var(--panel-soft); }
+
+    code {
+      font-family: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+      font-size: 0.88em; background: var(--blue-soft); color: #1e3a8a;
+      padding: 1px 6px; border-radius: 5px;
+    }
+
+    pre {
+      background: var(--code-bg); color: var(--code-ink);
+      padding: 16px 18px; border-radius: var(--radius);
+      overflow-x: auto; font-size: 0.84rem; line-height: 1.55; position: relative;
+    }
+    pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
+
+    .copy-btn {
+      position: absolute; top: 10px; right: 10px;
+      background: rgba(255,255,255,0.12); color: #e2e8f0;
+      border: 1px solid rgba(255,255,255,0.2); border-radius: 6px;
+      font-size: 0.72rem; padding: 4px 9px; cursor: pointer;
+    }
+    .copy-btn:hover { background: rgba(255,255,255,0.22); }
+
+    .mermaid {
+      background: var(--panel-soft); border: 1px solid var(--line);
+      border-radius: var(--radius); padding: 18px; margin: 16px 0; text-align: center;
+    }
+
+    .callout {
+      border-left: 4px solid var(--amber); background: var(--amber-soft);
+      padding: 12px 16px; border-radius: 0 var(--radius) var(--radius) 0;
+      margin: 16px 0; font-size: 0.93rem;
+    }
+    .callout.danger { border-color: var(--red); background: var(--red-soft); }
+    .callout.info { border-color: var(--blue); background: var(--blue-soft); }
+    .callout.ok { border-color: var(--green); background: var(--green-soft); }
+
+    .step-num {
+      display: inline-block; min-width: 26px; height: 26px; line-height: 26px;
+      text-align: center; background: var(--amber); color: #fff;
+      border-radius: 50%; font-size: 0.82rem; font-weight: 700; margin-right: 8px;
+    }
+
+    .badge { display: inline-block; font-size: 0.74rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+    .b-todo { background: var(--red-soft); color: var(--red); }
+    .b-part { background: var(--amber-soft); color: var(--amber); }
+    .b-done { background: var(--green-soft); color: var(--green); }
+    .b-p0 { background: #ede9fe; color: #6d28d9; }
+    .b-p1 { background: var(--blue-soft); color: #1e3a8a; }
+    .b-p2 { background: var(--amber-soft); color: var(--amber); }
+    .b-p3 { background: var(--green-soft); color: var(--green); }
+
+    .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.85rem; color: var(--muted); margin: 6px 0 0; }
+
+    footer { text-align: center; color: var(--muted); font-size: 0.85rem; margin-top: 28px; }
+
+    @media (max-width: 880px) {
+      .layout { grid-template-columns: 1fr; }
+      nav.toc { position: static; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <p class="eyebrow">lgup-m365-mcp · Azure Implementation Roadmap</p>
+      <h1>Azure 구현 로드맵 — DRM 복호화 · 슬기 연동</h1>
+      <p class="lead">
+        아키텍처 다이어그램의 <strong>Azure 영역</strong>(MCP/API 진입점 · DRM 호출 · 인증/키 관리 ·
+        상암 데이터센터망/슬기 API 연동)을 실제로 구현하기 위한 단계별 로드맵입니다.
+        현재 자산(Bicep 인프라 + 최소 MCP 앱)과 목표 아키텍처의 격차를 정리하고,
+        Phase 0~3의 실행 항목과 결정 필요 사항을 정의합니다.
+      </p>
+      <div class="meta-row">
+        <span class="chip">기준 다이어그램: M365 ↔ Azure ↔ 상암 DC</span>
+        <span class="chip">기준 코드: main.bicep · app/src/index.ts</span>
+        <span class="chip">작성일 2026-06-28</span>
+      </div>
+    </header>
+
+    <div class="layout">
+      <nav class="toc" aria-label="문서 섹션">
+        <strong>목차</strong>
+        <ol>
+          <li><a href="#summary">요약</a></li>
+          <li><a href="#target">목표 아키텍처</a></li>
+          <li><a href="#inventory">현재 자산 인벤토리</a></li>
+          <li><a href="#gap">Gap 분석</a></li>
+          <li><a href="#phase0">Phase 0 · 설계 확정</a></li>
+          <li><a href="#phase1">Phase 1 · 업무 로직</a></li>
+          <li><a href="#phase2">Phase 2 · 네트워킹/보안</a></li>
+          <li><a href="#phase3">Phase 3 · 운영화</a></li>
+          <li><a href="#decisions">결정 필요 사항</a></li>
+          <li><a href="#risks">리스크</a></li>
+          <li><a href="#timeline">마일스톤</a></li>
+        </ol>
+      </nav>
+
+      <main>
+        <section id="summary">
+          <h2>0. 요약</h2>
+          <p>
+            인프라 뼈대(Container Apps · ACR · Key Vault · Storage · APIM · 관측성 · Easy Auth)는
+            <strong>약 70% 완성</strong>되어 있으나, 다이어그램이 요구하는 <strong>실제 업무 기능</strong>
+            (DRM 복호화 파이프라인, OneDrive 파일 왕복, 상암 DC 슬기 API 연동, 온프레미스 네트워킹)은
+            <strong>거의 미구현(0%)</strong> 상태입니다.
+          </p>
+          <div class="legend">
+            <span><span class="badge b-done">완료</span> 구현됨</span>
+            <span><span class="badge b-part">부분</span> 배선만/일부</span>
+            <span><span class="badge b-todo">없음</span> 미구현</span>
+          </div>
+          <table>
+            <thead><tr><th>책임 영역(다이어그램)</th><th>상태</th><th>핵심 부족분</th></tr></thead>
+            <tbody>
+              <tr><td>MCP/API 진입점</td><td><span class="badge b-part">부분</span></td><td>복호화 요청 툴/엔드포인트 없음, MCP vs REST 미결</td></tr>
+              <tr><td>DRM 호출(복호화)</td><td><span class="badge b-todo">없음</span></td><td>DRM 클라이언트 코드·스펙 없음</td></tr>
+              <tr><td>인증/키 관리</td><td><span class="badge b-part">부분</span></td><td>Key Vault 런타임 조회·OBO 흐름 없음</td></tr>
+              <tr><td>OneDrive 파일 반환</td><td><span class="badge b-todo">없음</span></td><td>Microsoft Graph 연동 없음</td></tr>
+              <tr><td>상암 DC / 슬기 API</td><td><span class="badge b-todo">없음</span></td><td>온프레미스 연결·클라이언트 전무</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="target">
+          <h2>1. 목표 아키텍처 (Azure 흐름)</h2>
+          <p>다이어그램의 Azure 영역과 데이터 흐름을 시퀀스로 표현하면 다음과 같습니다.</p>
+          <div class="mermaid">
+flowchart LR
+  U([사용자]) -->|"① Non-HWP 업로드 / DRM 복호화 요청"| CS[Copilot Studio]
+  CS -->|"② MCP / API 호출"| MCP{{"Azure: MCP/API 진입점"}}
+  U -.->|"DRM 복호화 요청(직접)"| MCP
+  MCP -->|"③ DRM 호출"| DRM[DRM 복호화]
+  MCP -->|"인증/키 조회"| KV[(인증/키 관리<br/>Key Vault)]
+  DRM -->|"④ 복호화된 HWP"| MCP
+  MCP -->|"⑤ 복호화된 HWP 반환"| OD[OneDrive 개인]
+  MCP ==>|"⑥ MCP / API 호출"| SADC[[상암 데이터센터망]]
+  SADC ==> SG[슬기 API / MCP]
+          </div>
+          <div class="callout info">
+            <strong>물음표(MCP/API?) 해소가 선행</strong>입니다. 진입점을 MCP 툴로 노출할지, REST API로 노출할지,
+            혹은 둘 다 제공할지에 따라 앱 구조·APIM 정책·Copilot Studio 커넥터 구성이 달라집니다.
+          </div>
+        </section>
+
+        <section id="inventory">
+          <h2>2. 현재 자산 인벤토리</h2>
+          <table>
+            <thead><tr><th>영역</th><th>파일/리소스</th><th>상태</th><th>비고</th></tr></thead>
+            <tbody>
+              <tr><td>오케스트레이션</td><td><code>main.bicep</code></td><td><span class="badge b-done">완료</span></td><td>RG·모듈 배선 완비</td></tr>
+              <tr><td>관측성</td><td><code>modules/observability.bicep</code></td><td><span class="badge b-done">완료</span></td><td>Log Analytics + App Insights</td></tr>
+              <tr><td>플랫폼 기반</td><td><code>modules/platform-foundation.bicep</code></td><td><span class="badge b-done">완료</span></td><td>UAMI · Key Vault · Storage(3 컨테이너)</td></tr>
+              <tr><td>레지스트리</td><td><code>modules/registry.bicep</code></td><td><span class="badge b-done">완료</span></td><td>ACR + AcrPull RBAC</td></tr>
+              <tr><td>애플리케이션</td><td><code>modules/application.bicep</code></td><td><span class="badge b-done">완료</span></td><td>Container Apps + Easy Auth + 시크릿 주입</td></tr>
+              <tr><td>게이트웨이</td><td><code>modules/gateway.bicep</code></td><td><span class="badge b-part">부분</span></td><td>APIM Consumption(공인망). 사내망 도달 불가</td></tr>
+              <tr><td>MCP 서버 앱</td><td><code>app/src/index.ts</code></td><td><span class="badge b-todo">골격</span></td><td>툴 2개(<code>test_hanik</code>, <code>get_current_user</code>)뿐</td></tr>
+              <tr><td>스토리지 컨테이너</td><td><code>incoming-nonhwp</code> · <code>processing-artifacts</code> · <code>result-hwp</code></td><td><span class="badge b-done">완료</span></td><td>파이프라인 단계용 버킷 준비됨(로직 없음)</td></tr>
+              <tr><td>DRM 배선</td><td><code>DRM_API_BASE_URL</code> · <code>drm-api-key</code></td><td><span class="badge b-part">부분</span></td><td>env/시크릿만 주입, 호출 코드 없음</td></tr>
+              <tr><td>네트워킹</td><td>—</td><td><span class="badge b-todo">없음</span></td><td>VNet/PE/온프레미스 연결 전무</td></tr>
+              <tr><td>문서</td><td><code>docs/*-deployment-guide.*</code></td><td><span class="badge b-part">부분</span></td><td>인프라 배포 중심, DRM/슬기 흐름 미반영</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="gap">
+          <h2>3. Gap 분석 (다이어그램 요소별)</h2>
+
+          <h3>A. MCP/API 진입점</h3>
+          <ul>
+            <li>복호화 요청을 받는 툴/엔드포인트(<code>decrypt_file</code> 등) 부재.</li>
+            <li>노출 방식(MCP/REST/둘 다) 미결 — 앱·APIM·커넥터 설계의 분기점.</li>
+            <li>요청 단위 멱등성·작업 ID(비동기 시) 설계 없음.</li>
+          </ul>
+
+          <h3>B. DRM 호출 (복호화 핵심)</h3>
+          <ul>
+            <li>DRM API 스펙(인증·요청/응답 포맷·동기/비동기·파일 전달 방식) 미정의.</li>
+            <li>복호화 파이프라인 단계(수신 → DRM 호출 → 결과 생성 → 반환) 미구현.</li>
+            <li>대용량/타임아웃/재시도/실패 처리 정책 없음.</li>
+          </ul>
+
+          <h3>C. 인증/키 관리</h3>
+          <ul>
+            <li>현재 자격증명은 env 시크릿 주입 의존 — <strong>Key Vault 런타임 조회 코드 없음</strong>.</li>
+            <li>Copilot Studio → Azure의 사용자 토큰 전달/On-Behalf-Of(OBO) 흐름 미설계.</li>
+            <li>운영자/워크로드 RBAC 분리, 키 로테이션 정책 없음.</li>
+          </ul>
+
+          <h3>D. 상암 데이터센터망 / 슬기 API <span class="badge b-todo">최대 리스크</span></h3>
+          <ul>
+            <li>온프레미스 연결 수단 없음 → <strong>VNet + ExpressRoute/S2S VPN + Private DNS</strong> 필요.</li>
+            <li>현 APIM Consumption / 공개 Container Apps 구성은 사내망 도달 불가.</li>
+            <li>슬기 API/MCP 클라이언트·엔드포인트·인증, 송신 IP 고정(NAT) 미정의.</li>
+          </ul>
+        </section>
+
+        <section id="phase0">
+          <h2><span class="badge b-p0">Phase 0</span> 설계 확정 (선행 필수)</h2>
+          <table>
+            <thead><tr><th>#</th><th>항목</th><th>산출물</th><th>의존</th></tr></thead>
+            <tbody>
+              <tr><td>0-1</td><td>진입점 방식 결정 (MCP vs REST vs 둘 다)</td><td>인터페이스 결정서</td><td>—</td></tr>
+              <tr><td>0-2</td><td>DRM API 인터페이스 스펙 확보(인증·포맷·파일전달·동기성)</td><td>DRM 연동 규격서</td><td>DRM 팀</td></tr>
+              <tr><td>0-3</td><td>슬기 API/MCP 인터페이스 스펙 확보</td><td>슬기 연동 규격서</td><td>슬기/상암 팀</td></tr>
+              <tr><td>0-4</td><td>데이터 흐름·권한 모델 확정(OneDrive ↔ Blob ↔ DRM ↔ 슬기)</td><td>데이터 플로우 다이어그램</td><td>0-1~0-3</td></tr>
+              <tr><td>0-5</td><td>온프레미스 연결 방식 결정(ExpressRoute vs VPN)</td><td>네트워크 설계 결정서</td><td>네트워크 팀</td></tr>
+            </tbody>
+          </table>
+          <div class="callout danger">
+            Phase 0의 5개 항목이 미정인 채로 Phase 1·2 코드를 확정할 수 없습니다.
+            특히 <strong>0-1 · 0-2 · 0-5</strong>(물음표 3개)가 전체 일정의 임계 경로입니다.
+          </div>
+        </section>
+
+        <section id="phase1">
+          <h2><span class="badge b-p1">Phase 1</span> 업무 로직 (애플리케이션)</h2>
+          <table>
+            <thead><tr><th>#</th><th>항목</th><th>대상</th><th>의존</th></tr></thead>
+            <tbody>
+              <tr><td>1-1</td><td><code>decrypt_file</code> 복호화 MCP 툴/REST 엔드포인트 추가</td><td><code>app/src/index.ts</code></td><td>0-1</td></tr>
+              <tr><td>1-2</td><td>DRM 호출 클라이언트 구현(Key Vault에서 키 조회)</td><td>app</td><td>0-2, 1-5</td></tr>
+              <tr><td>1-3</td><td>Microsoft Graph 연동: OneDrive 다운로드/업로드(복호화 HWP 반환)</td><td>app</td><td>0-4</td></tr>
+              <tr><td>1-4</td><td>Blob 스테이징 파이프라인(<code>incoming → processing → result</code>)</td><td>app</td><td>0-4</td></tr>
+              <tr><td>1-5</td><td>Key Vault 런타임 시크릿 조회(SDK/관리 ID) 구현</td><td>app</td><td>—</td></tr>
+              <tr><td>1-6</td><td>슬기 API/MCP 아웃바운드 클라이언트 구현</td><td>app</td><td>0-3, 2-2</td></tr>
+              <tr><td>1-7</td><td>비동기 작업 처리(작업 ID·상태 조회) — DRM 동기성에 따라</td><td>app</td><td>0-2</td></tr>
+            </tbody>
+          </table>
+          <div class="callout info">
+            현재 앱은 <strong>stateless Streamable HTTP MCP</strong> 구조입니다. 1-1~1-7은 이 구조 위에
+            툴/라우트를 확장하는 방식으로 추가하며, 외부 자격증명은 1-5의 Key Vault 조회로 통일합니다.
+          </div>
+        </section>
+
+        <section id="phase2">
+          <h2><span class="badge b-p2">Phase 2</span> 네트워킹 / 보안 (인프라)</h2>
+          <table>
+            <thead><tr><th>#</th><th>항목</th><th>대상</th><th>의존</th></tr></thead>
+            <tbody>
+              <tr><td>2-1</td><td><code>modules/networking.bicep</code>: VNet + 서브넷 + Container Apps VNet 통합</td><td>신규 모듈</td><td>0-5</td></tr>
+              <tr><td>2-2</td><td>ExpressRoute/S2S VPN + Private DNS로 상암 DC 연결</td><td>인프라</td><td>0-5, 2-1</td></tr>
+              <tr><td>2-3</td><td>Storage/Key Vault Private Endpoint 적용</td><td>foundation 모듈</td><td>2-1</td></tr>
+              <tr><td>2-4</td><td>NAT Gateway 송신 IP 고정(사내 방화벽 allow-list 대응)</td><td>networking</td><td>2-1</td></tr>
+              <tr><td>2-5</td><td>Key Vault 시크릿 시딩 자동화 + RBAC(운영자/워크로드 분리)</td><td>인프라</td><td>—</td></tr>
+              <tr><td>2-6</td><td>APIM 티어 재검토(Consumption → Standard v2/Premium, VNet 통합)</td><td><code>gateway.bicep</code></td><td>0-5</td></tr>
+            </tbody>
+          </table>
+          <div class="callout danger">
+            <strong>상암 DC 연결이 최대 난관</strong>입니다. APIM Consumption과 공개 Container Apps로는
+            사내망에 도달할 수 없으므로, 2-1·2-2·2-6은 함께 묶어 설계해야 합니다.
+          </div>
+        </section>
+
+        <section id="phase3">
+          <h2><span class="badge b-p3">Phase 3</span> 운영화</h2>
+          <table>
+            <thead><tr><th>#</th><th>항목</th><th>대상</th></tr></thead>
+            <tbody>
+              <tr><td>3-1</td><td>복호화 실패/재시도/감사 로깅, 민감정보 마스킹</td><td>app + App Insights</td></tr>
+              <tr><td>3-2</td><td>GitHub Actions CI/CD(이미지 빌드 → ACR → 배포)</td><td>.github/workflows</td></tr>
+              <tr><td>3-3</td><td>환경 승인·what-if·정책 게이트(SDLC 정렬)</td><td>CI/CD</td></tr>
+              <tr><td>3-4</td><td>알림(<code>modules/alerts.bicep</code>) · 헬스 대시보드</td><td>신규 모듈</td></tr>
+              <tr><td>3-5</td><td>문서 갱신: 본 로드맵 + 배포 가이드에 DRM/슬기/상암 흐름 반영</td><td><code>docs/</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="decisions">
+          <h2>4. 결정 필요 사항 (Open Questions)</h2>
+          <table>
+            <thead><tr><th>ID</th><th>질문</th><th>영향</th><th>담당</th></tr></thead>
+            <tbody>
+              <tr><td>Q1</td><td>진입점을 MCP 툴 / REST API / 둘 다 중 무엇으로?</td><td>앱·APIM·커넥터 구조</td><td>아키텍트</td></tr>
+              <tr><td>Q2</td><td>DRM API 스펙(인증·포맷·동기성·파일전달)?</td><td>Phase 1 전체</td><td>DRM 팀</td></tr>
+              <tr><td>Q3</td><td>상암 DC 연결을 ExpressRoute / S2S VPN 중 무엇으로?</td><td>Phase 2 전체·비용</td><td>네트워크 팀</td></tr>
+              <tr><td>Q4</td><td>복호화 결과 반환 경로: OneDrive 직접 / Blob 다운로드 링크?</td><td>Graph 권한 모델</td><td>아키텍트</td></tr>
+              <tr><td>Q5</td><td>슬기 API 연동의 트리거 시점(복호화 전/후/병렬)?</td><td>파이프라인 순서</td><td>업무 담당</td></tr>
+              <tr><td>Q6</td><td>대용량 HWP·장시간 작업 시 동기 vs 비동기 처리?</td><td>1-1·1-7 설계</td><td>아키텍트</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="risks">
+          <h2>5. 리스크</h2>
+          <table>
+            <thead><tr><th>리스크</th><th>영향</th><th>완화책</th></tr></thead>
+            <tbody>
+              <tr><td>상암 DC 연결 리드타임</td><td>높음</td><td>Phase 0에서 네트워크 팀과 조기 착수, 회선/방화벽 선행 신청</td></tr>
+              <tr><td>DRM/슬기 스펙 미확보</td><td>높음</td><td>목 인터페이스로 Phase 1 병행, 계약서 우선 확정</td></tr>
+              <tr><td>민감정보(복호화 파일) 유출</td><td>높음</td><td>Private Endpoint·전송/저장 암호화·짧은 보존주기·감사 로깅</td></tr>
+              <tr><td>APIM Consumption 한계</td><td>중간</td><td>VNet 통합 가능 티어로 조기 전환 검토</td></tr>
+              <tr><td>OneDrive Graph 권한 과다</td><td>중간</td><td>최소 권한 스코프·사이트/폴더 한정 위임</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="timeline">
+          <h2>6. 마일스톤 (개념 일정)</h2>
+          <p>아래는 의존 관계 기반 개념 타임라인입니다. 실제 기간은 DRM/슬기/네트워크 팀 회신에 따라 조정합니다.</p>
+          <div class="mermaid">
+gantt
+  dateFormat  YYYY-MM-DD
+  axisFormat  %m/%d
+  title Azure 구현 개념 일정
+  section Phase 0 설계
+  진입점/DRM/슬기/네트워크 결정      :p0, 2026-06-30, 14d
+  section Phase 1 업무 로직
+  복호화 툴 + DRM/Graph/Blob        :p1, after p0, 21d
+  슬기 아웃바운드 클라이언트        :p1b, after p1, 10d
+  section Phase 2 네트워킹/보안
+  VNet/PE/온프레미스 연결          :p2, after p0, 21d
+  section Phase 3 운영화
+  CI/CD·로깅·문서                  :p3, after p1b, 14d
+          </div>
+          <div class="callout ok">
+            <strong>권장 시작점</strong>: Phase 0의 Q1·Q2·Q3 확정과 동시에, 의존이 없는
+            <code>1-5(Key Vault 조회)</code>와 <code>2-1(VNet 모듈)</code>을 병렬 착수하면 임계 경로를 단축할 수 있습니다.
+          </div>
+        </section>
+
+        <footer>
+          lgup-m365-mcp · Azure 구현 로드맵(DRM 복호화 · 슬기 연동) · 생성일 2026-06-28
+        </footer>
+      </main>
+    </div>
+  </div>
+
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+  </script>
+  <script>
+    document.querySelectorAll("pre").forEach((pre) => {
+      const btn = document.createElement("button");
+      btn.className = "copy-btn";
+      btn.textContent = "복사";
+      btn.addEventListener("click", () => {
+        const code = pre.querySelector("code");
+        navigator.clipboard.writeText(code ? code.innerText : pre.innerText).then(() => {
+          btn.textContent = "복사됨";
+          setTimeout(() => (btn.textContent = "복사"), 1500);
+        });
+      });
+      pre.appendChild(btn);
+    });
+  </script>
+</body>
+</html>

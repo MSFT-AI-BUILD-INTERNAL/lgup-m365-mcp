@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Microsoft Entra ID 등록 가이드 — 호출 성공까지</title>
+    <script>
+      (() => {
+        const param = new URLSearchParams(window.location.search).get("scoutTheme");
+        const theme =
+          param || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        document.documentElement.setAttribute("data-theme", theme);
+      })();
+    </script>
+    <style>
+      :root {
+        color-scheme: light;
+        --cp-bg: #f7f4ef;
+        --cp-bg-elevated: #fcfbf8;
+        --cp-surface: #ffffff;
+        --cp-surface-soft: #f5f5f5;
+        --cp-border: #dedede;
+        --cp-border-strong: #919191;
+        --cp-text: #242424;
+        --cp-text-muted: #5c5c5c;
+        --cp-text-soft: #6f6f6f;
+        --cp-accent: #b11f4b;
+        --cp-accent-hover: #9a1a41;
+        --cp-accent-soft: rgba(177, 31, 75, 0.08);
+        --cp-accent-fg: #ffffff;
+        --cp-success: #16a34a;
+        --cp-danger: #dc2626;
+        --cp-warning: #f59e0b;
+        --cp-link: #0078d4;
+        --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+        --cp-overlay: rgba(255, 255, 255, 0.8);
+        --cp-panel: rgba(255, 255, 255, 0.86);
+        --cp-panel-strong: rgba(255, 255, 255, 0.96);
+        --cp-sheen: rgba(255, 255, 255, 0.55);
+        --cp-highlight: rgba(177, 31, 75, 0.12);
+      }
+      html[data-theme="dark"] {
+        color-scheme: dark;
+        --cp-bg: #3d3b3a;
+        --cp-bg-elevated: #343231;
+        --cp-surface: #292929;
+        --cp-surface-soft: #2e2e2e;
+        --cp-border: #474747;
+        --cp-border-strong: #5f5f5f;
+        --cp-text: #dedede;
+        --cp-text-muted: #919191;
+        --cp-text-soft: #b0b0b0;
+        --cp-accent: #fd8ea1;
+        --cp-accent-hover: #fb7b91;
+        --cp-accent-soft: rgba(253, 142, 161, 0.14);
+        --cp-accent-fg: #1a1a1a;
+        --cp-success: #4ade80;
+        --cp-danger: #f87171;
+        --cp-warning: #fbbf24;
+        --cp-link: #4da6ff;
+        --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+        --cp-overlay: rgba(41, 41, 41, 0.88);
+        --cp-panel: rgba(41, 41, 41, 0.72);
+        --cp-panel-strong: rgba(41, 41, 41, 0.96);
+        --cp-sheen: rgba(255, 255, 255, 0.04);
+        --cp-highlight: rgba(253, 142, 161, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--cp-bg);
+        color: var(--cp-text);
+        font-family: "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif;
+        line-height: 1.6;
+      }
+      .wrap {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 2.5rem 1.25rem 4rem;
+      }
+      header.page {
+        margin-bottom: 2rem;
+      }
+      header.page .eyebrow {
+        color: var(--cp-accent);
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        font-size: 0.8rem;
+      }
+      h1 {
+        font-size: 1.9rem;
+        margin: 0.4rem 0 0.6rem;
+      }
+      h2 {
+        font-size: 1.3rem;
+        margin: 2.4rem 0 1rem;
+        padding-bottom: 0.4rem;
+        border-bottom: 2px solid var(--cp-border);
+      }
+      h3 {
+        font-size: 1.05rem;
+        margin: 1.4rem 0 0.5rem;
+      }
+      p {
+        color: var(--cp-text);
+      }
+      .muted {
+        color: var(--cp-text-muted);
+      }
+      a {
+        color: var(--cp-link);
+      }
+      code {
+        font-family: Consolas, "Courier New", Courier, monospace;
+        background: var(--cp-surface-soft);
+        border: 1px solid var(--cp-border);
+        border-radius: 0.375rem;
+        padding: 0.1rem 0.35rem;
+        font-size: 0.88em;
+      }
+      pre {
+        background: var(--cp-surface-soft);
+        border: 1px solid var(--cp-border);
+        border-radius: 0.625rem;
+        padding: 0.9rem 1rem;
+        overflow: auto;
+        font-family: Consolas, "Courier New", Courier, monospace;
+        font-size: 0.86rem;
+      }
+      pre code {
+        background: none;
+        border: none;
+        padding: 0;
+      }
+
+      .card {
+        background: var(--cp-surface);
+        border: 1px solid var(--cp-border);
+        border-radius: 16px;
+        box-shadow: 0 0 2px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.14);
+        padding: 1.25rem 1.4rem;
+        margin: 1rem 0;
+      }
+      .step {
+        display: flex;
+        gap: 1rem;
+        align-items: flex-start;
+        margin: 1rem 0;
+      }
+      .step .num {
+        flex: 0 0 auto;
+        width: 2rem;
+        height: 2rem;
+        border-radius: 0.625rem;
+        background: var(--cp-accent);
+        color: var(--cp-accent-fg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+      }
+      .step .body {
+        flex: 1 1 auto;
+      }
+      .step .body h3 {
+        margin-top: 0.15rem;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 0.75rem 0;
+        font-size: 0.92rem;
+      }
+      th,
+      td {
+        border: 1px solid var(--cp-border);
+        padding: 0.5rem 0.7rem;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: var(--cp-surface-soft);
+        font-weight: 600;
+      }
+
+      .callout {
+        border-left: 4px solid var(--cp-accent);
+        background: var(--cp-accent-soft);
+        border-radius: 0.5rem;
+        padding: 0.75rem 1rem;
+        margin: 1rem 0;
+      }
+      .callout.warn {
+        border-left-color: var(--cp-warning);
+        background: rgba(245, 158, 11, 0.1);
+      }
+      .callout.ok {
+        border-left-color: var(--cp-success);
+        background: rgba(22, 163, 74, 0.1);
+      }
+      .callout.err {
+        border-left-color: var(--cp-danger);
+        background: rgba(220, 38, 38, 0.1);
+      }
+      .callout strong {
+        display: block;
+        margin-bottom: 0.2rem;
+      }
+
+      .tag {
+        display: inline-block;
+        font-size: 0.74rem;
+        font-weight: 600;
+        padding: 0.1rem 0.5rem;
+        border-radius: 999px;
+        background: var(--cp-highlight);
+        color: var(--cp-accent);
+        border: 1px solid var(--cp-border);
+      }
+
+      .flow-wrap {
+        overflow-x: auto;
+        background: var(--cp-bg-elevated);
+        border: 1px solid var(--cp-border);
+        border-radius: 16px;
+        padding: 1rem;
+      }
+      svg.flow {
+        display: block;
+        margin: 0 auto;
+        min-width: 720px;
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-top: 0.75rem;
+        font-size: 0.85rem;
+        color: var(--cp-text-muted);
+      }
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+      }
+      .swatch {
+        width: 0.9rem;
+        height: 0.9rem;
+        border-radius: 0.25rem;
+        border: 1px solid var(--cp-border-strong);
+        display: inline-block;
+      }
+      footer.page {
+        margin-top: 3rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--cp-border);
+        color: var(--cp-text-soft);
+        font-size: 0.85rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="page">
+        <div class="eyebrow">entra-auth-app-sample</div>
+        <h1>Microsoft Entra ID 등록 가이드 — <code>/api/message</code> 호출 성공까지</h1>
+        <p class="muted">
+          FastAPI 백엔드 + MSAL Browser 프론트엔드 샘플에서 로그인과 보호 API 호출이
+          성공할 때까지 거친 앱 등록 과정을 단계별로 정리합니다. 실제로 마주친 오류
+          (<code>AADSTS500011</code>, <code>AADSTS9002326</code>)와 해결책도 함께 담았습니다.
+        </p>
+      </header>
+
+      <!-- ───────── 순서도 ───────── -->
+      <h2>전체 순서도</h2>
+      <div class="flow-wrap">
+        <svg class="flow" viewBox="0 0 760 1180" role="img" aria-label="Entra 등록 순서도">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--cp-border-strong)" />
+            </marker>
+          </defs>
+
+          <!-- start -->
+          <rect x="280" y="20" width="200" height="46" rx="23" fill="var(--cp-accent)" />
+          <text x="380" y="48" text-anchor="middle" fill="var(--cp-accent-fg)" font-size="15" font-weight="700">시작 · 앱 등록 생성</text>
+
+          <!-- step1 -->
+          <rect x="250" y="100" width="260" height="56" rx="12" fill="var(--cp-surface)" stroke="var(--cp-border-strong)" />
+          <text x="380" y="124" text-anchor="middle" fill="var(--cp-text)" font-size="13" font-weight="600">1. App registration 생성</text>
+          <text x="380" y="142" text-anchor="middle" fill="var(--cp-text-muted)" font-size="11">Tenant ID · Client ID 확보</text>
+
+          <!-- step2 -->
+          <rect x="250" y="186" width="260" height="56" rx="12" fill="var(--cp-surface)" stroke="var(--cp-border-strong)" />
+          <text x="380" y="210" text-anchor="middle" fill="var(--cp-text)" font-size="13" font-weight="600">2. .env 작성</text>
+          <text x="380" y="228" text-anchor="middle" fill="var(--cp-text-muted)" font-size="11">ENTRA_TENANT_ID · ENTRA_CLIENT_ID</text>
+
+          <!-- step3 -->
+          <rect x="250" y="272" width="260" height="56" rx="12" fill="var(--cp-surface)" stroke="var(--cp-border-strong)" />
+          <text x="380" y="296" text-anchor="middle" fill="var(--cp-text)" font-size="13" font-weight="600">3. Expose an API</text>
+          <text x="380" y="314" text-anchor="middle" fill="var(--cp-text-muted)" font-size="11">App ID URI + access_as_user 스코프</text>
+
+          <!-- step4 -->
+          <rect x="250" y="358" width="260" height="56" rx="12" fill="var(--cp-surface)" stroke="var(--cp-border-strong)" />
+          <text x="380" y="382" text-anchor="middle" fill="var(--cp-text)" font-size="13" font-weight="600">4. Authentication</text>
+          <text x="380" y="400" text-anchor="middle" fill="var(--cp-text-muted)" font-size="11">SPA 플랫폼 · http://localhost:8000</text>
+
+          <!-- step5 -->
+          <rect x="250" y="444" width="260" height="56" rx="12" fill="var(--cp-surface)" stroke="var(--cp-border-strong)" />
+          <text x="380" y="468" text-anchor="middle" fill="var(--cp-text)" font-size="13" font-weight="600">5. 서버 실행 · 접속</text>
+          <text x="380" y="486" text-anchor="middle" fill="var(--cp-text-muted)" font-size="11">uvicorn → http://localhost:8000</text>
+
+          <!-- login action -->
+          <rect x="250" y="530" width="260" height="50" rx="12" fill="var(--cp-surface)" stroke="var(--cp-border-strong)" />
+          <text x="380" y="560" text-anchor="middle" fill="var(--cp-text)" font-size="13" font-weight="600">6. Authentication Button 클릭</text>
+
+          <!-- decision 1: 500011 -->
+          <polygon points="380,602 510,662 380,722 250,662" fill="var(--cp-bg-elevated)" stroke="var(--cp-warning)" stroke-width="1.5" />
+          <text x="380" y="656" text-anchor="middle" fill="var(--cp-text)" font-size="12" font-weight="600">AADSTS500011?</text>
+          <text x="380" y="674" text-anchor="middle" fill="var(--cp-text-muted)" font-size="10">resource not found</text>
+
+          <!-- fix 1 -->
+          <rect x="556" y="634" width="180" height="56" rx="12" fill="rgba(245,158,11,0.12)" stroke="var(--cp-warning)" />
+          <text x="646" y="658" text-anchor="middle" fill="var(--cp-text)" font-size="12" font-weight="600">App ID URI 설정 +</text>
+          <text x="646" y="675" text-anchor="middle" fill="var(--cp-text)" font-size="12" font-weight="600">스코프 노출 → 재시도</text>
+
+          <!-- decision 2: 9002326 -->
+          <polygon points="380,752 510,812 380,872 250,812" fill="var(--cp-bg-elevated)" stroke="var(--cp-warning)" stroke-width="1.5" />
+          <text x="380" y="806" text-anchor="middle" fill="var(--cp-text)" font-size="12" font-weight="600">AADSTS9002326?</text>
+          <text x="380" y="824" text-anchor="middle" fill="var(--cp-text-muted)" font-size="10">cross-origin / SPA</text>
+
+          <!-- fix 2 -->
+          <rect x="556" y="784" width="180" height="56" rx="12" fill="rgba(245,158,11,0.12)" stroke="var(--cp-warning)" />
+          <text x="646" y="808" text-anchor="middle" fill="var(--cp-text)" font-size="12" font-weight="600">리디렉션 URI를</text>
+          <text x="646" y="825" text-anchor="middle" fill="var(--cp-text)" font-size="12" font-weight="600">SPA로 이동 → 재시도</text>
+
+          <!-- signed in -->
+          <rect x="250" y="902" width="260" height="50" rx="12" fill="rgba(22,163,74,0.14)" stroke="var(--cp-success)" />
+          <text x="380" y="932" text-anchor="middle" fill="var(--cp-text)" font-size="13" font-weight="600">7. Signed in ✔</text>
+
+          <!-- post message -->
+          <rect x="250" y="982" width="260" height="50" rx="12" fill="var(--cp-surface)" stroke="var(--cp-border-strong)" />
+          <text x="380" y="1012" text-anchor="middle" fill="var(--cp-text)" font-size="13" font-weight="600">8. Post Message 클릭</text>
+
+          <!-- success -->
+          <rect x="270" y="1064" width="220" height="56" rx="28" fill="var(--cp-success)" />
+          <text x="380" y="1088" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="700">200 OK · 호출 성공</text>
+          <text x="380" y="1106" text-anchor="middle" fill="#ffffff" font-size="11">claims 전체 응답 표시</text>
+
+          <!-- vertical arrows -->
+          <g stroke="var(--cp-border-strong)" stroke-width="1.6" fill="none" marker-end="url(#arrow)">
+            <line x1="380" y1="66" x2="380" y2="98" />
+            <line x1="380" y1="156" x2="380" y2="184" />
+            <line x1="380" y1="242" x2="380" y2="270" />
+            <line x1="380" y1="328" x2="380" y2="356" />
+            <line x1="380" y1="414" x2="380" y2="442" />
+            <line x1="380" y1="500" x2="380" y2="528" />
+            <line x1="380" y1="580" x2="380" y2="600" />
+            <line x1="380" y1="722" x2="380" y2="750" />
+            <line x1="380" y1="872" x2="380" y2="900" />
+            <line x1="380" y1="952" x2="380" y2="980" />
+            <line x1="380" y1="1032" x2="380" y2="1062" />
+          </g>
+
+          <!-- branch arrows (Yes to fix, loop back) -->
+          <g stroke="var(--cp-warning)" stroke-width="1.6" fill="none" marker-end="url(#arrow)">
+            <line x1="510" y1="662" x2="554" y2="662" />
+            <line x1="510" y1="812" x2="554" y2="812" />
+          </g>
+          <!-- loop back arrows from fix boxes to login -->
+          <g stroke="var(--cp-warning)" stroke-width="1.4" fill="none" marker-end="url(#arrow)" stroke-dasharray="5 4">
+            <path d="M646,634 C646,560 560,555 512,555" />
+            <path d="M646,784 C646,560 560,555 512,555" />
+          </g>
+
+          <!-- No labels -->
+          <text x="392" y="744" fill="var(--cp-success)" font-size="11" font-weight="700">아니오 ↓</text>
+          <text x="392" y="894" fill="var(--cp-success)" font-size="11" font-weight="700">아니오 ↓</text>
+          <text x="524" y="652" fill="var(--cp-warning)" font-size="11" font-weight="700">예</text>
+          <text x="524" y="802" fill="var(--cp-warning)" font-size="11" font-weight="700">예</text>
+        </svg>
+        <div class="legend">
+          <span><span class="swatch" style="background: var(--cp-accent)"></span> 시작/종료</span>
+          <span><span class="swatch" style="background: var(--cp-surface)"></span> 작업 단계</span>
+          <span><span class="swatch" style="background: var(--cp-bg-elevated); border-color: var(--cp-warning)"></span> 판단(오류 분기)</span>
+          <span><span class="swatch" style="background: rgba(22,163,74,0.3)"></span> 성공</span>
+        </div>
+      </div>
+
+      <!-- ───────── 단계별 상세 ───────── -->
+      <h2>단계별 상세 가이드</h2>
+
+      <div class="card">
+        <div class="step">
+          <div class="num">1</div>
+          <div class="body">
+            <h3>앱 등록(App registration) 생성</h3>
+            <p>
+              Azure Portal → <strong>Microsoft Entra ID</strong> →
+              <strong>App registrations</strong> → <strong>New registration</strong>.
+            </p>
+            <table>
+              <tr><th>항목</th><th>값</th></tr>
+              <tr><td>Name</td><td><code>entra-auth-app-sample</code> (자유)</td></tr>
+              <tr><td>Supported account types</td><td>단일 테넌트(권장)</td></tr>
+              <tr><td>Redirect URI</td><td>이 단계에서는 비워두고 4단계에서 SPA로 추가</td></tr>
+            </table>
+            <p class="muted">생성 후 <strong>Overview</strong>에서 Directory(tenant) ID와 Application(client) ID를 복사합니다.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="step">
+          <div class="num">2</div>
+          <div class="body">
+            <h3>.env 작성 (최소 2개)</h3>
+            <p>나머지 두 변수는 <code>ENTRA_CLIENT_ID</code>로부터 자동 파생되므로 표준 설정이면 두 값만 필수입니다.</p>
+            <pre><code>ENTRA_TENANT_ID=&lt;directory-tenant-id&gt;
+ENTRA_CLIENT_ID=&lt;application-client-id&gt;
+# 선택(표준이면 생략 가능)
+ENTRA_AUDIENCE=api://&lt;application-client-id&gt;
+ENTRA_API_SCOPE=api://&lt;application-client-id&gt;/access_as_user</code></pre>
+            <div class="callout warn">
+              <strong>주의</strong>
+              <code>ENTRA_AUDIENCE</code>/<code>ENTRA_API_SCOPE</code>를 적을 거면 플레이스홀더(<code>&lt;application-client-id&gt;</code>)를
+              실제 client ID로 반드시 교체하세요. 특히 <code>ENTRA_API_SCOPE</code>는 프론트엔드가 토큰을 요청할 때
+              그대로 쓰여 잘못된 값이면 로그인이 실패합니다.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="step">
+          <div class="num">3</div>
+          <div class="body">
+            <h3>Expose an API — App ID URI + 스코프</h3>
+            <p>App registration → <strong>Expose an API</strong>:</p>
+            <ol>
+              <li><strong>Application ID URI</strong> → <em>Add</em> → 기본값 <code>api://&lt;client-id&gt;</code> 저장</li>
+              <li><strong>+ Add a scope</strong> → 이름 <code>access_as_user</code>, Who can consent: <em>Admins and users</em>, State: <em>Enabled</em></li>
+            </ol>
+            <div class="callout err">
+              <strong>이 단계를 건너뛰면 → AADSTS500011</strong>
+              "resource principal named api://… was not found" — App ID URI/스코프가 없어 리소스를 못 찾는 경우입니다.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="step">
+          <div class="num">4</div>
+          <div class="body">
+            <h3>Authentication — 리디렉션 URI를 SPA로</h3>
+            <p>App registration → <strong>Authentication</strong> → <strong>+ Add a platform</strong> →
+              <strong>Single-page application</strong> 선택 후 입력:</p>
+            <pre><code>http://localhost:8000</code></pre>
+            <div class="callout err">
+              <strong>Web 플랫폼으로 넣으면 → AADSTS9002326</strong>
+              "Cross-origin token redemption is permitted only for the 'Single-Page Application' client-type."
+              MSAL Browser는 PKCE+CORS라 반드시 <strong>SPA</strong> 플랫폼이어야 합니다.
+            </div>
+            <div class="callout warn">
+              <strong>origin 정확히 일치</strong>
+              <code>localhost</code>와 <code>127.0.0.1</code>은 서로 다른 origin입니다. 접속 주소와 동일하게 등록하세요.
+              끝에 슬래시/경로 없이 <code>http://localhost:8000</code>.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="step">
+          <div class="num">5</div>
+          <div class="body">
+            <h3>백엔드 실행 후 접속</h3>
+            <pre><code>uv run uvicorn app.main:app --reload
+# 또는
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000</code></pre>
+            <p>브라우저에서 <strong><code>http://localhost:8000</code></strong> 접속.
+              하단 상태가 <em>"Not signed in."</em> 이면 설정 인식 성공.</p>
+            <div class="callout warn">
+              <strong>.env 변경 후엔 서버 재시작</strong>
+              설정은 시작 시 1회 로드됩니다. 단, <em>앱 등록(Portal)</em> 변경은 즉시 반영되어 서버 재시작이 필요 없습니다.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="step">
+          <div class="num">6</div>
+          <div class="body">
+            <h3>로그인 → Post Message</h3>
+            <ol>
+              <li><strong>Authentication Button</strong> 클릭 → Microsoft 로그인 + 최초 1회 동의</li>
+              <li>상태가 <em>"Signed in as &lt;email&gt;"</em> 로 변경되면 성공</li>
+              <li><strong>Post Message</strong> 클릭 → 응답 패널에 <code>200</code> 응답(JSON) 표시</li>
+            </ol>
+            <div class="callout ok">
+              <strong>성공 응답 예시</strong>
+              <pre><code>{
+  "authenticated": true,
+  "request": { "message": "..." },
+  "user": { "id": "...", "email": "...", "name": "...", "tenantId": "...", "scopes": "access_as_user" },
+  "token": { "issuer": "...", "audience": "...", "expiresAt": ... },
+  "claims": { /* 디코딩된 전체 JWT 클레임 */ }
+}</code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ───────── 오류 요약 ───────── -->
+      <h2>마주친 오류 &amp; 해결 요약</h2>
+      <table>
+        <tr>
+          <th>오류 코드</th>
+          <th>메시지 요지</th>
+          <th>원인</th>
+          <th>해결</th>
+        </tr>
+        <tr>
+          <td><span class="tag">AADSTS500011</span></td>
+          <td>resource principal named <code>api://…</code> was not found</td>
+          <td>App ID URI/스코프 미설정</td>
+          <td>3단계: Expose an API에서 App ID URI 추가 + <code>access_as_user</code> 노출</td>
+        </tr>
+        <tr>
+          <td><span class="tag">AADSTS9002326</span></td>
+          <td>Cross-origin token redemption … only for 'Single-Page Application'</td>
+          <td>리디렉션 URI가 Web 플랫폼</td>
+          <td>4단계: 해당 URI를 <strong>SPA</strong> 플랫폼으로 이동</td>
+        </tr>
+        <tr>
+          <td><span class="tag">AADSTS50011</span></td>
+          <td>redirect URI mismatch</td>
+          <td>등록 origin ≠ 접속 origin</td>
+          <td>접속 주소와 동일한 origin 등록 (<code>localhost</code> vs <code>127.0.0.1</code>)</td>
+        </tr>
+        <tr>
+          <td><span class="tag">401</span></td>
+          <td>Invalid or expired access token</td>
+          <td>audience/issuer 불일치</td>
+          <td>서버 로그 <code>Entra token validation failed</code>의 expected vs actual 비교. aud가 bare ID면 <code>ENTRA_AUDIENCE</code>에 콤마로 추가</td>
+        </tr>
+      </table>
+
+      <div class="callout">
+        <strong>최소 필수 체크리스트</strong>
+        <ol style="margin: 0.3rem 0 0">
+          <li>App registration 생성 → tenant/client ID 확보</li>
+          <li><code>.env</code>에 <code>ENTRA_TENANT_ID</code>, <code>ENTRA_CLIENT_ID</code></li>
+          <li>Expose an API: App ID URI + <code>access_as_user</code></li>
+          <li>Authentication: <strong>SPA</strong> 플랫폼에 <code>http://localhost:8000</code></li>
+          <li><code>localhost</code>로 접속 → 로그인 → Post Message → 200</li>
+        </ol>
+      </div>
+
+      <footer class="page">
+        entra-auth-app-sample · Microsoft Entra ID 등록 가이드 · 라이트/다크 테마 자동 적용
+      </footer>
+    </div>
+  </body>
+</html>
