@@ -46,12 +46,13 @@ flowchart LR
 |---|---|---|---|
 | 오케스트레이션 | `main.bicep` | ✅ | RG·모듈 배선 완비 |
 | 관측성 | `modules/observability.bicep` | ✅ | Log Analytics + App Insights |
-| 플랫폼 기반 | `modules/platform-foundation.bicep` | ✅ | UAMI · Key Vault · Storage(3 컨테이너) |
-| 레지스트리 | `modules/registry.bicep` | ✅ | ACR + AcrPull RBAC |
+| 플랫폼 기반 | `modules/platform-foundation.bicep` | ✅ | UAMI |
+| Key Vault 접근 | `modules/key-vault-access.bicep` | ✅ | 기존 KV 참조 |
+| 레지스트리 | `modules/registry.bicep` | ✅ | 기존 ACR 참조 |
 | 애플리케이션 | `modules/application.bicep` | ✅ | Container Apps + Easy Auth + 시크릿 주입 |
 | 게이트웨이 | `modules/gateway.bicep` | 🟡 | APIM Consumption(공인망). 사내망 도달 불가 |
 | MCP 서버 앱 | `app/src/index.ts` | 🔴(골격) | 툴 2개(`test_hanik`, `get_current_user`)뿐 |
-| 스토리지 컨테이너 | `incoming-nonhwp` · `processing-artifacts` · `result-hwp` | ✅ | 버킷만 준비(로직 없음) |
+| 스토리지 컨테이너 | — | ⚪ | 현재 스택에서 제거됨(Blob 파이프라인 미구현) |
 | DRM 배선 | `DRM_API_BASE_URL` · `drm-api-key` | 🟡 | env/시크릿만 주입, 호출 코드 없음 |
 | 네트워킹 | — | 🔴 | VNet/PE/온프레미스 연결 전무 |
 | 문서 | `docs/*-deployment-guide.*` | 🟡 | 인프라 배포 중심, DRM/슬기 흐름 미반영 |

@@ -55,6 +55,7 @@ APIM="${PREFIX}-${ENV}-apim-${HASH}"
 
 # --- 시크릿 (환경변수로 주입, 히스토리 주의) ---
 export CLIENT_APPLICATION_SECRET='...'
+# Optional: only when the corresponding integration is used
 export NGIS_API_KEY='...'
 export DRM_API_KEY='...'
 ```
@@ -153,30 +154,7 @@ KV_URI=$(az keyvault show -n "$KV" -g "$RG" --query properties.vaultUri -o tsv)
 KV_ID=$(az keyvault show -n "$KV" -g "$RG" --query id -o tsv)
 ```
 
-### 5.3 Storage Account + 컨테이너 3개
-
-```bash
-az storage account create \
-  --name "$ST" \
-  --resource-group "$RG" \
-  --location "$LOCATION" \
-  --sku Standard_LRS \
-  --kind StorageV2 \
-  --access-tier Hot \
-  --min-tls-version TLS1_2 \
-  --allow-blob-public-access false \
-  --https-only true
-
-for c in incoming-nonhwp result-hwp processing-artifacts; do
-  az storage container create \
-    --name "$c" \
-    --account-name "$ST" \
-    --auth-mode login \
-    --public-access off
-done
-```
-
-### 5.4 롤 할당: Key Vault Secrets User → UAMI
+### 5.3 (수동) Key Vault 접근 권한 부여
 
 ```bash
 az role assignment create \
@@ -202,7 +180,7 @@ ACR_ID=$(az acr show -n "$ACR" --query id -o tsv)
 ACR_LOGINSERVER=$(az acr show -n "$ACR" --query loginServer -o tsv)
 ```
 
-### 6.1 롤 할당: AcrPull → UAMI
+### 6.1 (수동) AcrPull → UAMI
 
 ```bash
 az role assignment create \
@@ -270,7 +248,16 @@ az containerapp create \
 
 > 공개(public) 이미지로 검증할 때는 `--registry-*` 옵션을 생략하세요.
 
+Container App는 `/health` 기준으로 명시적 프로브를 사용하도록 생성/유지하는 것을 권장합니다.
+- Startup: `initialDelay=10s`, `period=10s`, `timeout=5s`, `failureThreshold=30`
+- Liveness: `initialDelay=30s`, `period=30s`, `timeout=5s`, `failureThreshold=3`
+- Readiness: `initialDelay=10s`, `period=10s`, `timeout=5s`, `failureThreshold=6`
+
+CLI 수동 생성 시에도 Bicep와 동일한 프로브 설정을 적용하세요.
+
 ### 7.3 시크릿 등록
+
+`CLIENT_APPLICATION_SECRET`는 필수입니다. `NGIS_API_KEY`, `DRM_API_KEY`는 해당 연동을 사용할 때만 추가하세요.
 
 ```bash
 az containerapp secret set \
@@ -298,7 +285,6 @@ az containerapp update \
     CONFLUENCE_BASE_URL="<confluenceBaseUrl>" \
     DRM_API_BASE_URL="<drmApiBaseUrl>" \
     KEY_VAULT_URI="$KV_URI" \
-    STORAGE_ACCOUNT_NAME="$ST" \
     CLIENT_APPLICATION_SECRET=secretref:client-application-secret \
     NGIS_API_KEY=secretref:ngis-api-key \
     DRM_API_KEY=secretref:drm-api-key
@@ -407,6 +393,27 @@ curl -s -X POST "${GATEWAY_URL}/mcp" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
+### 9.1 `deploy-app.sh` 사용 시 후속 헬스 검증
+
+`deploy-app.sh`는 이미지 업데이트 직후 `/health`를 최대 약 100초(20회 × 5초 간격) 검증합니다.  
+검증 실패 시 종료 코드 1로 실패 처리하며, 아래 진단 명령을 바로 안내합니다.
+
+```bash
+az containerapp show --name "<app>" --resource-group "<rg>" -o yaml
+az containerapp revision list --name "<app>" --resource-group "<rg>" -o table
+az containerapp logs show --name "<app>" --resource-group "<rg>" --type system --tail 200
+az containerapp logs show --name "<app>" --resource-group "<rg>" --type console --tail 200
+az monitor activity-log list --resource-group "<rg>" --offset 1h --max-events 50 -o table
+```
+
+### 9.2 Startup probe 실패(ContainerTerminated) 대응 플로우
+
+1. `az containerapp show`로 `runningStatus`, `provisioningState`, `latestReadyRevisionName` 확인  
+2. `az containerapp revision list`로 실패 리비전 식별  
+3. `--type system` 로그로 probe 실패 원인(연결 실패, timeout) 확인  
+4. `--type console` 로그로 앱 초기화 에러(환경변수/시크릿/의존 API) 확인  
+5. 필요한 경우 이전 Ready 리비전으로 복구 후 이미지/설정 수정 재배포
+
 ---
 
 ## 10. 리소스 생성 순서 요약
@@ -416,10 +423,10 @@ Bicep의 모듈 의존성과 동일한 순서를 따라야 합니다.
 ```mermaid
 flowchart LR
     RG[1. Resource Group] --> OBS[2. Log Analytics + App Insights]
-    OBS --> FND[3. Identity + KeyVault + Storage]
-    FND --> ROLE1[4. KV Secrets User 롤]
+    OBS --> FND[3. Identity + KeyVault]
+    FND -.-> ROLE1[4. 수동 KV 권한]
     FND --> REG[5. ACR]
-    REG --> ROLE2[6. AcrPull 롤]
+    REG -.-> ROLE2[6. 수동 AcrPull]
     OBS --> CAE[7. Container Apps Env]
     FND --> APP[8. Container App]
     REG --> APP
@@ -430,8 +437,8 @@ flowchart LR
 | 단계 | 반드시 먼저 있어야 하는 것 |
 |------|---------------------------|
 | App Insights | Log Analytics |
-| KV Secrets User 롤 | Key Vault + UAMI |
-| AcrPull 롤 | ACR + UAMI |
+| 수동 KV 권한 | Key Vault + UAMI |
+| 수동 AcrPull | ACR + UAMI |
 | Container Apps Env | Log Analytics |
 | Container App | UAMI, ACR, Env, (App Insights 연결 문자열) |
 | API Management API | Container App URL |

@@ -16,4 +16,4 @@ dist/
 *.local.bicepparam
 *.private.bicepparam
 *.secrets.bicepparam
-!/main.dev.bicepparam
+**/main.dev.bicepparam

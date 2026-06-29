@@ -52,16 +52,23 @@ az acr build \
    param containerPort = 8080
    ```
 
-2. 배포:
+2. 인프라 배포:
 
    ```bash
-   az deployment sub create \
-     --location eastasia \
-     --template-file ../main.bicep \
-     --parameters ../main.local.bicepparam
+   export CLIENT_APPLICATION_SECRET='...'
+   ../deploy-bicep.sh --param-file ../main.local.bicepparam
    ```
 
-3. 배포 후 출력된 `containerAppUrl` 의 `/mcp` 엔드포인트를 Copilot Studio Agent 또는 Client Application의 MCP 연결 설정에 반영합니다.
+3. `AcrPull` 권한 부여 후 앱 전환:
+
+   ```bash
+   ../deploy-app.sh \
+     --param-file ../main.local.bicepparam \
+     --registry-name <your-acr-name> \
+     --image <your-acr-name>.azurecr.io/hanik-mcp-server:1.0.0
+   ```
+
+4. 배포 후 출력된 `containerAppUrl` 의 `/mcp` 엔드포인트를 Copilot Studio Agent 또는 Client Application의 MCP 연결 설정에 반영합니다.
 
 ## 파일 구조
 

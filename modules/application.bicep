@@ -8,15 +8,14 @@ param applicationInsightsConnectionString string
 param managedIdentityId string
 param managedIdentityClientId string
 param keyVaultUri string
-param storageAccountName string
 param copilotStudio object
 param integrations object
 @secure()
 param clientApplicationSecret string
 @secure()
-param ngisApiKey string
+param ngisApiKey string = ''
 @secure()
-param drmApiKey string
+param drmApiKey string = ''
 param containerImage string
 param containerPort int
 param minReplicas int
@@ -37,6 +36,84 @@ param containerRegistryServer string = ''
 resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' existing = {
   name: logAnalyticsWorkspaceName
 }
+
+var containerAppSecrets = concat([
+  {
+    name: 'client-application-secret'
+    value: clientApplicationSecret
+  }
+], empty(ngisApiKey) ? [] : [
+  {
+    name: 'ngis-api-key'
+    value: ngisApiKey
+  }
+], empty(drmApiKey) ? [] : [
+  {
+    name: 'drm-api-key'
+    value: drmApiKey
+  }
+])
+
+var containerAppEnv = concat([
+  {
+    name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+    value: applicationInsightsConnectionString
+  }
+  {
+    name: 'AZURE_CLIENT_ID'
+    value: managedIdentityClientId
+  }
+  {
+    name: 'COPILOT_TENANT_ID'
+    value: copilotStudio.tenantId
+  }
+  {
+    name: 'COPILOT_STUDIO_ENVIRONMENT'
+    value: copilotStudio.copilotStudioEnvironment
+  }
+  {
+    name: 'APIM_GATEWAY_URL'
+    value: integrations.apimGatewayUrl
+  }
+  {
+    name: 'NGIS_BASE_URL'
+    value: integrations.ngisBaseUrl
+  }
+  {
+    name: 'PSS_BASE_URL'
+    value: integrations.pssBaseUrl
+  }
+  {
+    name: 'TIRO_BASE_URL'
+    value: integrations.tiroBaseUrl
+  }
+  {
+    name: 'CONFLUENCE_BASE_URL'
+    value: integrations.confluenceBaseUrl
+  }
+  {
+    name: 'DRM_API_BASE_URL'
+    value: integrations.drmApiBaseUrl
+  }
+  {
+    name: 'KEY_VAULT_URI'
+    value: keyVaultUri
+  }
+  {
+    name: 'CLIENT_APPLICATION_SECRET'
+    secretRef: 'client-application-secret'
+  }
+], empty(ngisApiKey) ? [] : [
+  {
+    name: 'NGIS_API_KEY'
+    secretRef: 'ngis-api-key'
+  }
+], empty(drmApiKey) ? [] : [
+  {
+    name: 'DRM_API_KEY'
+    secretRef: 'drm-api-key'
+  }
+])
 
 resource managedEnvironment 'Microsoft.App/managedEnvironments@2023-05-01' = {
   name: managedEnvironmentName
@@ -77,92 +154,53 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
           identity: managedIdentityId
         }
       ]
-      secrets: [
-        {
-          name: 'client-application-secret'
-          value: clientApplicationSecret
-        }
-        {
-          name: 'ngis-api-key'
-          value: ngisApiKey
-        }
-        {
-          name: 'drm-api-key'
-          value: drmApiKey
-        }
-      ]
+      secrets: containerAppSecrets
     }
     template: {
       containers: [
         {
           name: 'mcp-api'
           image: containerImage
-          env: [
-            {
-              name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
-              value: applicationInsightsConnectionString
-            }
-            {
-              name: 'AZURE_CLIENT_ID'
-              value: managedIdentityClientId
-            }
-            {
-              name: 'COPILOT_TENANT_ID'
-              value: copilotStudio.tenantId
-            }
-            {
-              name: 'COPILOT_STUDIO_ENVIRONMENT'
-              value: copilotStudio.copilotStudioEnvironment
-            }
-            {
-              name: 'APIM_GATEWAY_URL'
-              value: integrations.apimGatewayUrl
-            }
-            {
-              name: 'NGIS_BASE_URL'
-              value: integrations.ngisBaseUrl
-            }
-            {
-              name: 'PSS_BASE_URL'
-              value: integrations.pssBaseUrl
-            }
-            {
-              name: 'TIRO_BASE_URL'
-              value: integrations.tiroBaseUrl
-            }
-            {
-              name: 'CONFLUENCE_BASE_URL'
-              value: integrations.confluenceBaseUrl
-            }
-            {
-              name: 'DRM_API_BASE_URL'
-              value: integrations.drmApiBaseUrl
-            }
-            {
-              name: 'KEY_VAULT_URI'
-              value: keyVaultUri
-            }
-            {
-              name: 'STORAGE_ACCOUNT_NAME'
-              value: storageAccountName
-            }
-            {
-              name: 'CLIENT_APPLICATION_SECRET'
-              secretRef: 'client-application-secret'
-            }
-            {
-              name: 'NGIS_API_KEY'
-              secretRef: 'ngis-api-key'
-            }
-            {
-              name: 'DRM_API_KEY'
-              secretRef: 'drm-api-key'
-            }
-          ]
+          env: containerAppEnv
           resources: {
             cpu: containerCpu
             memory: containerMemory
           }
+          probes: [
+            {
+              type: 'Startup'
+              httpGet: {
+                path: '/health'
+                port: containerPort
+              }
+              initialDelaySeconds: 10
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 30
+            }
+            {
+              type: 'Liveness'
+              httpGet: {
+                path: '/health'
+                port: containerPort
+              }
+              initialDelaySeconds: 30
+              periodSeconds: 30
+              timeoutSeconds: 5
+              failureThreshold: 3
+            }
+            {
+              type: 'Readiness'
+              httpGet: {
+                path: '/health'
+                port: containerPort
+              }
+              initialDelaySeconds: 10
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 6
+            }
+          ]
         }
       ]
       scale: {

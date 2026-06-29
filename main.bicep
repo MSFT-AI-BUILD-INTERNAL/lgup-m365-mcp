@@ -41,6 +41,15 @@ param integrations IntegrationEndpoints
 @description('Container image for the Azure-hosted MCP/API implementation.')
 param containerImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 
+@description('Existing Azure Container Registry name in the target resource group. Leave empty for public images.')
+param containerRegistryName string = ''
+
+@description('When true, configure the Container App to pull from the existing ACR on this deployment. Keep false for the first deploy before manual AcrPull grant.')
+param enableContainerRegistryOnDeploy bool = false
+
+@description('Existing Key Vault name in the target resource group. Leave empty when the workload does not need Key Vault.')
+param keyVaultName string = ''
+
 @description('Port exposed by the container application.')
 param containerPort int = 8080
 
@@ -62,11 +71,11 @@ param clientApplicationSecret string
 
 @secure()
 @description('API key for NGIS integration.')
-param ngisApiKey string
+param ngisApiKey string = ''
 
 @secure()
 @description('API key for DRM integration.')
-param drmApiKey string
+param drmApiKey string = ''
 
 @description('Publisher email for the API Management gateway.')
 param apimPublisherEmail string = 'admin@example.com'
@@ -84,26 +93,15 @@ resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   tags: tags
 }
 
-var normalizedPrefix = replace(toLower(namePrefix), '-', '')
 var resourcePrefix = '${namePrefix}-${environmentName}'
 var logAnalyticsWorkspaceName = '${resourcePrefix}-law'
 var applicationInsightsName = '${resourcePrefix}-appi'
 var managedIdentityName = '${resourcePrefix}-uami'
 var managedEnvironmentName = '${resourcePrefix}-cae'
 var containerAppName = '${resourcePrefix}-mcp-api'
-var keyVaultName = take(
-  '${normalizedPrefix}${environmentName}kv${uniqueString(subscription().id, resourceGroupName)}',
-  24
-)
-var storageAccountName = take(
-  '${normalizedPrefix}${environmentName}st${uniqueString(subscription().id, resourceGroupName)}',
-  24
-)
-var containerRegistryName = take(
-  '${normalizedPrefix}${environmentName}acr${uniqueString(subscription().id, resourceGroupName)}',
-  50
-)
 var apimName = take('${namePrefix}-${environmentName}-apim-${uniqueString(subscription().id, resourceGroupName)}', 50)
+var containerRegistryLoginServer = empty(containerRegistryName) ? '' : '${containerRegistryName}.azurecr.io'
+var keyVaultUri = empty(keyVaultName) ? '' : keyVault!.outputs.keyVaultUri
 
 module observability './modules/observability.bicep' = {
   scope: rg
@@ -120,19 +118,21 @@ module foundation './modules/platform-foundation.bicep' = {
   params: {
     location: location
     managedIdentityName: managedIdentityName
-    keyVaultName: keyVaultName
-    storageAccountName: storageAccountName
     tags: tags
   }
 }
 
-module registry './modules/registry.bicep' = {
+module keyVault './modules/key-vault-access.bicep' = if (!empty(keyVaultName)) {
   scope: rg
   params: {
-    location: location
+    keyVaultName: keyVaultName
+  }
+}
+
+module registry './modules/registry.bicep' = if (!empty(containerRegistryName)) {
+  scope: rg
+  params: {
     acrName: containerRegistryName
-    managedIdentityPrincipalId: foundation.outputs.managedIdentityPrincipalId
-    tags: tags
   }
 }
 
@@ -146,9 +146,8 @@ module application './modules/application.bicep' = {
     applicationInsightsConnectionString: observability.outputs.applicationInsightsConnectionString
     managedIdentityId: foundation.outputs.managedIdentityId
     managedIdentityClientId: foundation.outputs.managedIdentityClientId
-    keyVaultUri: foundation.outputs.keyVaultUri
-    storageAccountName: foundation.outputs.storageAccountName
-    containerRegistryServer: registry.outputs.loginServer
+    keyVaultUri: keyVaultUri
+    containerRegistryServer: enableContainerRegistryOnDeploy ? containerRegistryLoginServer : ''
     copilotStudio: copilotStudio
     integrations: integrations
     clientApplicationSecret: clientApplicationSecret
@@ -183,17 +182,23 @@ module gateway './modules/gateway.bicep' = {
 output logAnalyticsWorkspaceName string = observability.outputs.logAnalyticsWorkspaceName
 output applicationInsightsName string = observability.outputs.applicationInsightsName
 output managedIdentityName string = foundation.outputs.managedIdentityName
-output keyVaultName string = foundation.outputs.keyVaultName
-output storageAccountName string = foundation.outputs.storageAccountName
-output containerRegistryLoginServer string = registry.outputs.loginServer
-output containerRegistryName string = registry.outputs.acrName
+output managedIdentityId string = foundation.outputs.managedIdentityId
+output managedIdentityPrincipalId string = foundation.outputs.managedIdentityPrincipalId
+output keyVaultName string = keyVaultName
+output keyVaultUri string = keyVaultUri
+output containerRegistryLoginServer string = containerRegistryLoginServer
+output containerRegistryName string = containerRegistryName
+output managedEnvironmentName string = managedEnvironmentName
 output containerAppName string = application.outputs.containerAppName
 output containerAppUrl string = application.outputs.containerAppUrl
+output apimName string = apimName
 output apimGatewayUrl string = gateway.outputs.gatewayUrl
 output apimMcpEndpoint string = '${gateway.outputs.gatewayUrl}/mcp'
 output implementationChecklist array = [
   '1. Replace placeholder values in main.dev.bicepparam.'
-  '2. Wire containerImage to your real MCP/API build artifact or ACR image.'
-  '3. Add APIM policies, private networking, and RBAC hardening after first deployment.'
-  '4. Connect ghcp-sdlc-sample style GitHub Actions to build and deploy this Bicep stack.'
+  '2. Set keyVaultName and containerRegistryName to your pre-created Azure resources.'
+  '3. Provision infrastructure with deploy-bicep.sh, which always uses a public bootstrap image.'
+  '4. After manual AcrPull is granted, run deploy-app.sh to switch the Container App to your private MCP/API image.'
+  '5. Configure RBAC manually, then add APIM policies and private networking hardening.'
+  '6. Connect ghcp-sdlc-sample style GitHub Actions to build and deploy this Bicep stack.'
 ]
