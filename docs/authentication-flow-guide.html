@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>인증 아키텍처 & APIM 동작 상세 가이드 — LGUP M365 MCP</title>
+    <script>
+      (() => {
+        const param = new URLSearchParams(window.location.search).get("scoutTheme");
+        const theme =
+          param || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        document.documentElement.setAttribute("data-theme", theme);
+      })();
+    </script>
+    <style>
+      :root {
+        color-scheme: light;
+        --cp-bg: #f7f4ef;
+        --cp-bg-elevated: #fcfbf8;
+        --cp-surface: #ffffff;
+        --cp-surface-soft: #f5f5f5;
+        --cp-border: #dedede;
+        --cp-border-strong: #919191;
+        --cp-text: #242424;
+        --cp-text-muted: #5c5c5c;
+        --cp-text-soft: #6f6f6f;
+        --cp-accent: #b11f4b;
+        --cp-accent-hover: #9a1a41;
+        --cp-accent-soft: rgba(177, 31, 75, 0.08);
+        --cp-accent-fg: #ffffff;
+        --cp-success: #16a34a;
+        --cp-danger: #dc2626;
+        --cp-warning: #f59e0b;
+        --cp-link: #0078d4;
+        --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+        --cp-highlight: rgba(177, 31, 75, 0.12);
+      }
+      html[data-theme="dark"] {
+        color-scheme: dark;
+        --cp-bg: #3d3b3a;
+        --cp-bg-elevated: #343231;
+        --cp-surface: #292929;
+        --cp-surface-soft: #2e2e2e;
+        --cp-border: #474747;
+        --cp-border-strong: #5f5f5f;
+        --cp-text: #dedede;
+        --cp-text-muted: #919191;
+        --cp-text-soft: #b0b0b0;
+        --cp-accent: #fd8ea1;
+        --cp-accent-hover: #fb7b91;
+        --cp-accent-soft: rgba(253, 142, 161, 0.14);
+        --cp-accent-fg: #1a1a1a;
+        --cp-success: #4ade80;
+        --cp-danger: #f87171;
+        --cp-warning: #fbbf24;
+        --cp-link: #4da6ff;
+        --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+        --cp-highlight: rgba(253, 142, 161, 0.12);
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--cp-bg);
+        color: var(--cp-text);
+        font-family: "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif;
+        line-height: 1.65;
+      }
+      .wrap { max-width: 1040px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+      header.page { margin-bottom: 2rem; }
+      header.page .eyebrow {
+        color: var(--cp-accent);
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        font-size: 0.8rem;
+      }
+      h1 { font-size: 2rem; margin: 0.4rem 0 0.6rem; }
+      h2 {
+        font-size: 1.35rem;
+        margin: 2.6rem 0 1rem;
+        padding-bottom: 0.4rem;
+        border-bottom: 2px solid var(--cp-border);
+      }
+      h3 { font-size: 1.08rem; margin: 1.5rem 0 0.5rem; }
+      p { color: var(--cp-text); }
+      .muted { color: var(--cp-text-muted); }
+      a { color: var(--cp-link); }
+      ul, ol { padding-left: 1.3rem; }
+      li { margin: 0.3rem 0; }
+      code {
+        font-family: Consolas, "Courier New", Courier, monospace;
+        background: var(--cp-surface-soft);
+        border: 1px solid var(--cp-border);
+        border-radius: 0.375rem;
+        padding: 0.1rem 0.35rem;
+        font-size: 0.86em;
+      }
+      pre {
+        background: var(--cp-surface-soft);
+        border: 1px solid var(--cp-border);
+        border-radius: 0.625rem;
+        padding: 0.9rem 1rem;
+        overflow: auto;
+        font-family: Consolas, "Courier New", Courier, monospace;
+        font-size: 0.82rem;
+        line-height: 1.55;
+      }
+      pre code { background: none; border: none; padding: 0; font-size: inherit; }
+
+      .card {
+        background: var(--cp-surface);
+        border: 1px solid var(--cp-border);
+        border-radius: 16px;
+        box-shadow: 0 0 2px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.14);
+        padding: 1.25rem 1.4rem;
+        margin: 1.1rem 0;
+      }
+      .lead {
+        font-size: 1.05rem;
+        color: var(--cp-text-muted);
+      }
+      table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+      th, td { border: 1px solid var(--cp-border); padding: 0.55rem 0.7rem; text-align: left; vertical-align: top; }
+      th { background: var(--cp-surface-soft); font-weight: 700; }
+      tbody tr:nth-child(even) { background: var(--cp-surface-soft); }
+
+      .note, .warn, .ok {
+        border-left: 4px solid var(--cp-link);
+        background: var(--cp-surface);
+        border-radius: 0 12px 12px 0;
+        padding: 0.85rem 1.1rem;
+        margin: 1.1rem 0;
+      }
+      .warn { border-left-color: var(--cp-warning); }
+      .ok { border-left-color: var(--cp-success); }
+      .note .tag, .warn .tag, .ok .tag {
+        display: inline-block;
+        font-weight: 700;
+        font-size: 0.72rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        margin-bottom: 0.25rem;
+      }
+      .note .tag { color: var(--cp-link); }
+      .warn .tag { color: var(--cp-warning); }
+      .ok .tag { color: var(--cp-success); }
+
+      .pill {
+        display: inline-block;
+        font-size: 0.74rem;
+        font-weight: 600;
+        padding: 0.12rem 0.5rem;
+        border-radius: 999px;
+        background: var(--cp-accent-soft);
+        color: var(--cp-accent);
+        border: 1px solid var(--cp-border);
+        margin-right: 0.3rem;
+      }
+      .diagram {
+        background: var(--cp-bg-elevated);
+        border: 1px solid var(--cp-border);
+        border-radius: 16px;
+        padding: 1rem;
+        margin: 1.1rem 0;
+        overflow-x: auto;
+      }
+      .diagram .cap {
+        font-size: 0.82rem;
+        color: var(--cp-text-muted);
+        margin: 0.2rem 0 0.6rem;
+        text-align: center;
+      }
+      .mermaid { display: flex; justify-content: center; }
+      .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+      @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+      .toc { columns: 2; column-gap: 2rem; font-size: 0.92rem; }
+      @media (max-width: 760px) { .toc { columns: 1; } }
+      .toc a { text-decoration: none; }
+      .kbd {
+        font-family: Consolas, monospace;
+        font-size: 0.78rem;
+        background: var(--cp-surface-soft);
+        border: 1px solid var(--cp-border-strong);
+        border-bottom-width: 2px;
+        border-radius: 0.3rem;
+        padding: 0.05rem 0.35rem;
+      }
+      footer.page { margin-top: 3rem; padding-top: 1.2rem; border-top: 1px solid var(--cp-border); color: var(--cp-text-muted); font-size: 0.85rem; }
+      .layer-legend { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; font-size: 0.82rem; margin-top: 0.6rem; }
+      .layer-legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+      .dot { width: 0.8rem; height: 0.8rem; border-radius: 3px; display: inline-block; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="page">
+        <div class="eyebrow">LGUP · M365 · Model Context Protocol</div>
+        <h1>인증 아키텍처 &amp; APIM 동작 상세 가이드</h1>
+        <p class="lead">
+          M365 Copilot Studio Agent <strong>또는</strong> Entra ID로 인증하는 업무 클라이언트가 API Management(APIM) → Azure Container Apps(Easy Auth) → MCP 서버 →
+          외부 시스템(예: <strong>DRM 복호화</strong>)으로 이어지는 <strong>엔드투엔드 인증·인가 흐름</strong>과 게이트웨이 동작을 도식과 함께 설명합니다.
+        </p>
+        <div>
+          <span class="pill">Entra ID OAuth 2.0</span>
+          <span class="pill">APIM validate-jwt</span>
+          <span class="pill">Container Apps Easy Auth</span>
+          <span class="pill">MCP Streamable HTTP</span>
+          <span class="pill">External MCP 연동</span>
+        </div>
+      </header>
+
+      <div class="card">
+        <strong>목차</strong>
+        <div class="toc" style="margin-top: 0.6rem;">
+          <a href="#overview">1. 전체 구성 한눈에 보기</a><br />
+          <a href="#components">2. 구성 요소와 역할</a><br />
+          <a href="#identity">3. Entra ID 신원 모델 (앱 등록·스코프·토큰)</a><br />
+          <a href="#e2e">4. 인증 시퀀스 — 두 클라이언트 패턴</a><br />
+          <a href="#drm">　· 4.2 직접 호출 플로우 (DRM 복호화)</a><br />
+          <a href="#apim">5. APIM 게이트웨이 동작 상세</a><br />
+          <a href="#easyauth">6. Container Apps Easy Auth 계층</a><br />
+          <a href="#app">7. 애플리케이션 계층 방어 (requireScope)</a><br />
+          <a href="#external">8. 외부 MCP 서버 호출 &amp; 신원 전파</a><br />
+          <a href="#discovery">9. OAuth 디스커버리 &amp; DCR</a><br />
+          <a href="#pitfalls">10. 알려진 함정과 진단</a><br />
+        </div>
+      </div>
+
+      <!-- 1 -->
+      <h2 id="overview">1. 전체 구성 한눈에 보기</h2>
+      <p>
+        이 솔루션은 <strong>3중 인증 계층(defense-in-depth)</strong>으로 보호됩니다. 토큰은 Entra ID가 한 번 발급하고,
+        APIM과 Container Apps Easy Auth가 각각 독립적으로 검증하며, 마지막으로 MCP 서버 애플리케이션이 스코프를 한 번 더 확인합니다.
+      </p>
+
+      <div class="diagram">
+        <div class="mermaid">
+flowchart LR
+    subgraph CLIENT["🟦 클라이언트 영역"]
+      U["👤 사용자<br/>(M365 사용자)"]
+      CS["Copilot Studio<br/>Agent / Client App"]
+      DC["🔐 업무 클라이언트<br/>(직접 Entra 호출)"]
+    end
+
+    subgraph ENTRA["🟪 Microsoft Entra ID"]
+      AAD["OAuth 2.0 / OIDC<br/>authorize · token · JWKS"]
+      APP["앱 등록<br/>lgmcp-dev-mcp-api-auth<br/>scopes: access_as_user,<br/>user_impersonation"]
+    end
+
+    subgraph AZURE["🟧 Azure (rg-ms-azure-ax-prd)"]
+      APIM["API Management<br/>(Consumption)<br/>① validate-jwt + scp 검사"]
+      subgraph CA["Container App: lgmcp-dev-mcp-api"]
+        EA["② Easy Auth<br/>(Entra, AllowAnonymous)"]
+        APPSRV["③ MCP 서버<br/>requireScope()<br/>Streamable HTTP"]
+      end
+    end
+
+    subgraph EXT["🟩 외부 시스템 (다운스트림)"]
+      NGIS["NGIS"]
+      PSS["PSS"]
+      TIRO["Tiro"]
+      CONF["Confluence"]
+      DRM["DRM API<br/>(복호화)"]
+    end
+
+    U --> CS
+    CS -- "OAuth 로그인" --> AAD
+    DC -- "OAuth 로그인" --> AAD
+    AAD -. "access_token<br/>aud=clientId<br/>scp=access_as_user" .-> CS
+    AAD -. "access_token" .-> DC
+    CS -- "POST /mcp + Bearer" --> APIM
+    DC -- "POST /mcp + Bearer<br/>(DRM 복호화 요청)" --> APIM
+    APIM -- "JWKS 서명검증" --> AAD
+    APIM -- "검증 통과 → 전달" --> EA
+    EA --> APPSRV
+    APPSRV -- "MCP client 호출" --> NGIS
+    APPSRV --> PSS
+    APPSRV --> TIRO
+    APPSRV --> CONF
+    APPSRV -- "복호화 요청/응답" --> DRM
+        </div>
+        <div class="cap">그림 1 — 전체 구성도: 두 클라이언트(Copilot Studio · 직접 Entra) → APIM → Easy Auth → MCP 서버 → 외부 시스템(DRM 복호화 포함)</div>
+      </div>
+
+      <div class="layer-legend">
+        <span><span class="dot" style="background:#6aa2ff"></span> 클라이언트</span>
+        <span><span class="dot" style="background:#b48ef7"></span> Entra ID (IdP)</span>
+        <span><span class="dot" style="background:#f7a86a"></span> Azure 워크로드</span>
+        <span><span class="dot" style="background:#6ad29a"></span> 외부 MCP</span>
+      </div>
+
+      <!-- 2 -->
+      <h2 id="components">2. 구성 요소와 역할</h2>
+      <table>
+        <thead>
+          <tr><th>구성 요소</th><th>리소스/코드</th><th>인증 관점의 역할</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Copilot Studio Agent / Client App</td>
+            <td>M365 클라이언트</td>
+            <td>사용자를 대신해 Entra ID에서 OAuth 로그인 → <code>access_token</code> 획득 → APIM에 <code>Authorization: Bearer</code> 헤더로 호출</td>
+          </tr>
+          <tr>
+            <td>Entra ID 앱 등록</td>
+            <td><code>lgmcp-dev-mcp-api-auth</code><br/>clientId <code>92ad2fc4-…-849420011273</code></td>
+            <td>토큰 발급자(IdP). API 식별자 <code>api://&lt;clientId&gt;</code>, 노출 스코프 <code>access_as_user</code>, v2.0 토큰</td>
+          </tr>
+          <tr>
+            <td>API Management</td>
+            <td><code>modules/gateway.bicep</code> · Consumption SKU</td>
+            <td><strong>1차 검증 게이트웨이</strong>: <code>validate-jwt</code>로 서명·audience·issuer·scope 검증. 구독키 불필요(<code>subscriptionRequired:false</code>)</td>
+          </tr>
+          <tr>
+            <td>Container App Easy Auth</td>
+            <td><code>modules/application.bicep</code> · <code>authConfigs/current</code></td>
+            <td><strong>2차 검증</strong>: 내장 인증이 토큰 재검증 후 <code>x-ms-client-principal*</code> 헤더로 신원 주입. <code>AllowAnonymous</code></td>
+          </tr>
+          <tr>
+            <td>MCP 서버 애플리케이션</td>
+            <td><code>app/src/index.ts</code> (Express + MCP SDK)</td>
+            <td><strong>3차 검증</strong>: <code>requireScope()</code>로 Bearer 존재 + <code>access_as_user</code> 스코프 확인. <code>get_current_user</code>로 신원 해석</td>
+          </tr>
+          <tr>
+            <td>외부 MCP 서버</td>
+            <td>NGIS · PSS · Tiro · Confluence · DRM</td>
+            <td>MCP 서버가 <em>MCP 클라이언트</em>로서 호출하는 다운스트림. 신원 전파(OBO/관리 ID/Key Vault 키) 필요</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- 3 -->
+      <h2 id="identity">3. Entra ID 신원 모델</h2>
+      <p>모든 검증 계층은 동일한 토큰을 신뢰의 근거로 사용합니다. 토큰의 핵심 클레임은 다음과 같습니다.</p>
+      <table>
+        <thead><tr><th>클레임</th><th>값(예시)</th><th>의미 / 검증 주체</th></tr></thead>
+        <tbody>
+          <tr><td><code>iss</code></td><td><code>https://login.microsoftonline.com/&lt;tenantId&gt;/v2.0</code></td><td>발급자. APIM·Easy Auth가 openid-config로 확인</td></tr>
+          <tr><td><code>aud</code></td><td><code>api://92ad2fc4-…</code> 또는 <code>92ad2fc4-…</code></td><td>대상 리소스. 두 형식 모두 허용 목록에 등록</td></tr>
+          <tr><td><code>scp</code></td><td><code>access_as_user</code> (다중 시 <code>"access_as_user user_impersonation"</code>)</td><td>위임 권한. 공백 구분 다중값일 수 있어 APIM <code>choose</code>·앱 <code>requireScope()</code>가 <strong>분할 검사</strong></td></tr>
+          <tr><td><code>tid</code></td><td><code>8bfb7e77-14dc-407e-b531-21115cbbf38d</code></td><td>테넌트 ID</td></tr>
+          <tr><td><code>oid</code> / <code>preferred_username</code></td><td>사용자 GUID / UPN</td><td><code>get_current_user</code>가 신원 표시에 사용</td></tr>
+        </tbody>
+      </table>
+
+      <div class="warn">
+        <span class="tag">⚠ 토큰 버전 필수</span>
+        앱 등록의 <code>api.requestedAccessTokenVersion</code>이 <strong>2</strong>여야 합니다. v1 토큰이 발급되면
+        Easy Auth의 <code>openIdIssuer</code>(v2.0)와 issuer가 불일치하여 <strong>403</strong>이 발생합니다.
+        (자세한 내용은 <a href="#pitfalls">10장</a> 참고)
+      </div>
+
+      <!-- 4 -->
+      <h2 id="e2e">4. 인증 시퀀스 — 두 클라이언트 패턴</h2>
+      <p>이 솔루션은 두 가지 클라이언트가 동일한 APIM <code>/mcp</code> 엔드포인트를 호출합니다:
+      ① <strong>Copilot Studio Agent</strong>(대화형), ② <strong>업무 클라이언트가 Entra ID로 직접 호출</strong>(예: DRM 복호화 배치/연동).
+      둘 다 같은 Entra 토큰·검증 체계를 공유합니다.</p>
+
+      <h3>4.1 Copilot Studio 경유</h3>
+      <div class="diagram">
+        <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor U as 👤 사용자
+    participant CS as Copilot Studio Agent
+    participant AAD as Entra ID
+    participant APIM as APIM (validate-jwt)
+    participant EA as Easy Auth
+    participant APP as MCP 서버
+    participant EXT as 외부 MCP 서버
+
+    U->>CS: 도구 사용 요청
+    CS->>AAD: Authorization Code + PKCE (scope: api://clientId/access_as_user)
+    AAD-->>CS: access_token (aud=api://clientId, scp=access_as_user, v2.0)
+    CS->>APIM: POST /mcp + Authorization: Bearer <token>
+    APIM->>AAD: openid-config / JWKS 조회 (서명키)
+    APIM->>APIM: 서명·aud·iss·scp 검증
+    alt 검증 실패
+        APIM-->>CS: 401 Unauthorized
+    else 검증 통과
+        APIM->>EA: 요청 전달 (buffer-response=false, SSE 유지)
+        EA->>EA: 토큰 재검증 + x-ms-client-principal* 헤더 주입
+        EA->>APP: 전달 (+ 신원 헤더)
+        APP->>APP: requireScope(): Bearer & access_as_user 확인
+        APP->>EXT: (업무 도구) MCP client로 다운스트림 호출
+        EXT-->>APP: 결과
+        APP-->>CS: MCP 응답 (Streamable HTTP / SSE)
+    end
+        </div>
+        <div class="cap">그림 2 — Copilot Studio → 외부 MCP 호출 시퀀스</div>
+      </div>
+
+      <h3 id="drm">4.2 직접 호출 플로우 — DRM 복호화</h3>
+      <p>
+        Copilot Studio를 거치지 않고, 업무 애플리케이션(배치/서비스/클라이언트)이 <strong>Entra ID에서 직접 토큰을 받아
+        APIM <code>/mcp</code>를 호출</strong>하는 패턴입니다. 대표 사례가 <strong>DRM 복호화</strong>로, 클라이언트가
+        암호화된 콘텐츠/참조를 MCP 도구로 전달하면 MCP 서버가 외부 <strong>DRM API</strong>를 호출해 복호화한 뒤 결과를 반환합니다.
+      </p>
+      <div class="diagram">
+        <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor APPC as 🔐 업무 클라이언트
+    participant AAD as Entra ID
+    participant APIM as APIM (validate-jwt + scp)
+    participant EA as Easy Auth
+    participant APP as MCP 서버
+    participant DRM as DRM API
+
+    APPC->>AAD: Auth Code / client_credentials / OBO<br/>(scope: api://clientId/access_as_user 또는 /.default)
+    AAD-->>APPC: access_token (aud=clientId, scp·v2.0)
+    APPC->>APIM: POST /mcp + Bearer<br/>{tools/call: drm_decrypt, args:{ref,...}}
+    APIM->>AAD: openid-config / JWKS
+    APIM->>APIM: 서명·aud·iss 검증 + scp 분할→access_as_user 확인
+    alt 검증 실패
+        APIM-->>APPC: 401 / 403
+    else 통과
+        APIM->>EA: 전달
+        EA->>APP: + x-ms-client-principal* 헤더
+        APP->>APP: requireScope() 통과
+        APP->>DRM: 복호화 요청 (관리 ID/Key Vault 키로 인증)
+        DRM-->>APP: 복호화 결과
+        APP-->>APPC: MCP 응답 (복호화된 데이터)
+    end
+        </div>
+        <div class="cap">그림 2-2 — 업무 클라이언트가 Entra ID로 APIM을 직접 호출하는 DRM 복호화 시퀀스</div>
+      </div>
+
+      <!-- 5 -->
+      <h2 id="apim">5. APIM 게이트웨이 동작 상세</h2>
+      <p>
+        APIM은 <strong>Consumption(서버리스)</strong> 티어로 배포되며, <code>mcp</code>라는 단일 API 아래 4개의 작업을 노출합니다.
+        보안의 핵심은 <code>POST /mcp</code> 작업에 걸린 <code>validate-jwt</code> 정책입니다.
+      </p>
+
+      <h3>5.1 API / 작업 구성</h3>
+      <table>
+        <thead><tr><th>메서드 · 경로</th><th>인증</th><th>목적</th></tr></thead>
+        <tbody>
+          <tr><td><code>POST /mcp</code></td><td><span class="pill">validate-jwt 필수</span></td><td>MCP Streamable HTTP 엔드포인트(도구 호출)</td></tr>
+          <tr><td><code>GET /health</code></td><td>없음</td><td>헬스 프로브</td></tr>
+          <tr><td><code>GET /.well-known/oauth-protected-resource</code></td><td>없음</td><td>RFC 9728 보호 리소스 메타데이터(디스커버리)</td></tr>
+          <tr><td><code>GET /.well-known/oauth-authorization-server</code></td><td>없음</td><td>RFC 8414 인가 서버 메타데이터(디스커버리)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>5.2 <code>POST /mcp</code> 의 validate-jwt 정책 (현행)</h3>
+      <p>
+        APIM의 <code>&lt;required-claims&gt;&lt;claim name="scp"&gt;</code>는 공백으로 구분된 <code>scp</code> 문자열을
+        <strong>분할하지 않고 통째로 비교</strong>합니다. 따라서 토큰의 <code>scp</code>가
+        <code>"access_as_user user_impersonation"</code>처럼 다중값이면 매칭에 실패합니다. 이를 피하기 위해
+        <strong>JWT 검증은 <code>validate-jwt</code></strong>로, <strong>스코프 검사는 <code>choose</code>에서 <code>scp</code>를 분할</strong>하여 수행합니다.
+      </p>
+      <pre><code>&lt;validate-jwt header-name="Authorization" require-scheme="Bearer"
+    failed-validation-httpcode="401"
+    failed-validation-error-message="Unauthorized. Valid Entra bearer token required."
+    output-token-variable-name="jwt"&gt;
+  &lt;openid-config url="https://login.microsoftonline.com/&lt;tenantId&gt;/v2.0/.well-known/openid-configuration" /&gt;
+  &lt;audiences&gt;
+    &lt;audience&gt;api://&lt;clientId&gt;&lt;/audience&gt;
+    &lt;audience&gt;&lt;clientId&gt;&lt;/audience&gt;
+  &lt;/audiences&gt;
+&lt;/validate-jwt&gt;
+&lt;choose&gt;
+  &lt;when condition="@(!((Jwt)context.Variables[&amp;quot;jwt&amp;quot;])
+      .Claims.GetValueOrDefault(&amp;quot;scp&amp;quot;,&amp;quot;&amp;quot;)
+      .Split(' ').Contains(&amp;quot;access_as_user&amp;quot;))"&gt;
+    &lt;return-response&gt;
+      &lt;set-status code="403" reason="Forbidden" /&gt;
+      &lt;set-body&gt;{"error":"Forbidden. Token must include the 'access_as_user' scope."}&lt;/set-body&gt;
+    &lt;/return-response&gt;
+  &lt;/when&gt;
+&lt;/choose&gt;</code></pre>
+      <div class="note">
+        <span class="tag">현황 반영 (2026-06-30)</span>
+        라이브 APIM과 <code>modules/gateway.bicep</code> 모두 위 정책으로 정렬되었습니다. 또한 Entra 앱 <code>92ad2fc4…</code>에
+        <code>access_as_user</code> 위임 스코프를 추가(기존 <code>user_impersonation</code> 유지)하고, Azure CLI 클라이언트를 두 스코프에 사전 승인했습니다.
+        <code>subscriptionRequired=false</code>(구독키 불필요)와 디스커버리 작업 2개도 적용되어 있습니다.
+      </div>
+
+      <p>정책이 수행하는 검증을 단계별로 보면:</p>
+      <div class="diagram">
+        <div class="mermaid">
+flowchart TD
+    A["요청 수신<br/>POST /mcp"] --> B{"Authorization:<br/>Bearer 헤더 존재?"}
+    B -- 아니오 --> X1["401 반환"]
+    B -- 예 --> C["openid-config에서<br/>JWKS 공개키 로드"]
+    C --> D{"서명 유효?"}
+    D -- 아니오 --> X2["401 반환"]
+    D -- 예 --> E{"aud == api://clientId<br/>또는 clientId?"}
+    E -- 아니오 --> X3["401 반환"]
+    E -- 예 --> F{"iss == tenant v2.0?<br/>만료 미경과?"}
+    F -- 아니오 --> X4["401 반환"]
+    F -- 예 --> G{"scp 공백분할 후<br/>access_as_user 포함?<br/>(choose 블록)"}
+    G -- 아니오 --> X5["403 Forbidden"]
+    G -- 예 --> H["✅ 백엔드로 전달<br/>(Container App)"]
+        </div>
+        <div class="cap">그림 3 — APIM validate-jwt 내부 의사결정 흐름</div>
+      </div>
+
+      <div class="note">
+        <span class="tag">설계 포인트</span>
+        <ul style="margin:0.3rem 0;">
+          <li><strong>구독키 불필요</strong>: <code>subscriptionRequired: false</code> — 인증은 오직 Entra 토큰으로만 수행하여 키 관리 부담 제거.</li>
+          <li><strong>SSE 스트리밍 보존</strong>: API 정책에서 <code>&lt;forward-request buffer-response="false" /&gt;</code> 로 응답 버퍼링을 끔. MCP Streamable HTTP(Server-Sent Events)가 끊기지 않고 통과.</li>
+          <li><strong>경로 보존</strong>: API <code>path</code>가 빈 문자열이라 게이트웨이 경로가 백엔드 <code>/mcp</code>·<code>/health</code>와 1:1로 매핑됨.</li>
+        </ul>
+      </div>
+
+      <!-- 6 -->
+      <h2 id="easyauth">6. Container Apps Easy Auth 계층</h2>
+      <p>
+        Container App에는 내장 인증(Easy Auth)이 <code>authConfigs/current</code>로 구성되어 있습니다. APIM을 통과한 토큰을
+        <strong>한 번 더 독립적으로 검증</strong>하고, 검증된 신원을 백엔드 컨테이너에 헤더로 주입합니다.
+      </p>
+      <div class="grid2">
+        <div class="card">
+          <h3 style="margin-top:0;">구성 요약</h3>
+          <ul style="margin:0;">
+            <li><code>platform.enabled = true</code></li>
+            <li><code>unauthenticatedClientAction = AllowAnonymous</code></li>
+            <li><code>openIdIssuer = …/&lt;tenantId&gt;/v2.0</code></li>
+            <li><code>allowedAudiences = [ api://clientId , clientId ]</code></li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0;">주입되는 신원 헤더</h3>
+          <ul style="margin:0;">
+            <li><code>x-ms-client-principal-name</code> (UPN)</li>
+            <li><code>x-ms-client-principal-id</code> (oid)</li>
+            <li><code>x-ms-client-principal-idp</code> (<code>aad</code>)</li>
+            <li><code>x-ms-client-principal</code> (Base64 클레임 전체)</li>
+          </ul>
+        </div>
+      </div>
+      <div class="note">
+        <span class="tag">AllowAnonymous 의 의미</span>
+        익명 호출도 백엔드까지 도달합니다(Easy Auth가 차단하지 않음). 유효한 토큰이 있을 때만 신원 헤더를 주입하며,
+        <strong>실제 접근 차단은 APIM(1차)과 앱의 <code>requireScope()</code>(3차)가 담당</strong>합니다. 이 구조 덕분에 헬스 프로브와
+        디스커버리 엔드포인트가 토큰 없이도 동작합니다.
+      </div>
+
+      <!-- 7 -->
+      <h2 id="app">7. 애플리케이션 계층 방어 (requireScope)</h2>
+      <p>
+        MCP 서버는 APIM·Easy Auth를 신뢰하되, <strong>방어적 심층 검증</strong>으로 <code>/mcp</code> 진입 시 토큰을 한 번 더 확인합니다.
+      </p>
+      <pre><code>function requireScope(req, res): boolean {
+  const authHeader = req.headers["authorization"];
+  // 1) Bearer 토큰이 없으면 401 + WWW-Authenticate (디스커버리 유도)
+  if (!authHeader?.toLowerCase().startsWith("bearer ")) {
+    res.setHeader("WWW-Authenticate",
+      `Bearer realm="api://${AUTH_CLIENT_ID}", authorization_uri="…/oauth2/v2.0/authorize"`);
+    return res.status(401)… , false;
+  }
+  // 2) 토큰이 JWT면 scp/roles 에 access_as_user 포함 여부 확인 → 없으면 403
+  const claims = decodeJwtClaims(token);
+  if (claims && !allScopes.includes("access_as_user")) return res.status(403)…, false;
+  return true;
+}</code></pre>
+      <ul>
+        <li><strong>401</strong>: Bearer 토큰 자체가 없음 → <code>WWW-Authenticate</code> 헤더로 OAuth 디스커버리 경로 안내.</li>
+        <li><strong>403</strong>: 토큰은 있으나 <code>access_as_user</code> 스코프가 없음.</li>
+        <li><strong>신원 해석</strong>: <code>get_current_user</code> 도구가 Easy Auth 헤더(우선) 또는 Bearer 클레임에서 사용자 정보를 조립.</li>
+      </ul>
+      <div class="ok">
+        <span class="tag">✓ 스코프 정합성 (해결됨 2026-06-30)</span>
+        Entra 앱 <code>92ad2fc4…</code>에 <code>access_as_user</code> 위임 스코프를 추가하여 토큰이 해당 스코프를 포함하도록 정렬했습니다
+        (기존 <code>user_impersonation</code>도 유지). APIM은 <code>choose</code>에서 <code>scp</code>를 분할 검사하고, 앱의 <code>requireScope()</code>도 동일하게 분할합니다.
+        다중 스코프 토큰(<code>"access_as_user user_impersonation"</code>)에서도 정상 통과합니다.
+      </div>
+
+      <!-- 8 -->
+      <h2 id="external">8. 외부 MCP 서버 호출 &amp; 신원 전파</h2>
+      <p>
+        MCP 서버는 도구 실행 시 스스로 <strong>MCP 클라이언트</strong>가 되어 NGIS·PSS·Tiro·Confluence·DRM 등
+        다운스트림 MCP 서버를 호출하고, 그 결과를 합쳐 Copilot Studio에 반환합니다. 각 다운스트림의 베이스 URL은
+        환경 변수(<code>NGIS_BASE_URL</code>, <code>PSS_BASE_URL</code> …)로, 비밀값은 Container App 시크릿/Key Vault로 주입됩니다.
+      </p>
+
+      <div class="diagram">
+        <div class="mermaid">
+flowchart LR
+    CS["Copilot Studio"] -->|Bearer access_as_user| GW["APIM → Easy Auth"]
+    GW --> MCP["MCP 서버<br/>(MCP client 역할)"]
+
+    subgraph PROP["신원 전파 옵션"]
+      direction TB
+      O1["A) OBO 토큰 교환<br/>(사용자 위임 유지)"]
+      O2["B) 관리 ID<br/>(앱→앱 신뢰)"]
+      O3["C) API 키 / Key Vault<br/>(레거시 시스템)"]
+    end
+
+    MCP --> PROP
+    PROP --> NGIS["NGIS MCP"]
+    PROP --> PSS["PSS MCP"]
+    PROP --> TIRO["Tiro MCP"]
+    PROP --> CONF["Confluence MCP"]
+    PROP --> DRM["DRM API MCP"]
+        </div>
+        <div class="cap">그림 4 — MCP 서버가 외부 MCP 서버를 호출할 때의 신원 전파 패턴</div>
+      </div>
+
+      <h3>8.1 신원 전파 전략 비교</h3>
+      <table>
+        <thead><tr><th>전략</th><th>방식</th><th>적합한 경우</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>A. On-Behalf-Of (OBO)</strong></td>
+            <td>수신한 사용자 토큰을 Entra의 OBO 흐름으로 다운스트림 <code>api://…/.default</code> 토큰으로 교환</td>
+            <td>다운스트림이 <em>사용자별 권한</em>을 요구할 때(권장)</td>
+          </tr>
+          <tr>
+            <td><strong>B. Managed Identity</strong></td>
+            <td>Container App의 사용자 할당 관리 ID(<code>lgmcp-dev-uami</code>)로 앱-앱 토큰 획득</td>
+            <td>다운스트림이 <em>서비스 신원</em>만 필요할 때</td>
+          </tr>
+          <tr>
+            <td><strong>C. API Key / Key Vault</strong></td>
+            <td>Key Vault에 보관한 키를 관리 ID로 읽어 헤더에 첨부</td>
+            <td>OAuth 미지원 레거시(NGIS/DRM 등)</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="note">
+        <span class="tag">보안 원칙</span>
+        외부 MCP 호출용 비밀은 코드/파라미터 파일에 두지 말고 <strong>Container App 시크릿 또는 Key Vault</strong>로만 주입하세요
+        (<code>auth-client-secret</code>, <code>ngis-api-key</code>, <code>drm-api-key</code> 시크릿 참고). 관리 ID로 Key Vault에 접근하면 키 노출을 최소화할 수 있습니다.
+      </div>
+
+      <h3>8.2 DRM 복호화 — 직접 호출 연계</h3>
+      <p>
+        <a href="#drm">4.2 직접 호출 플로우</a>의 백엔드 동작입니다. 업무 클라이언트가 Entra 토큰으로 APIM <code>/mcp</code>에
+        <code>drm_decrypt</code> 같은 도구를 호출하면, MCP 서버가 외부 <strong>DRM API</strong>(<code>DRM_API_BASE_URL</code>)를 호출해 복호화합니다.
+      </p>
+      <table>
+        <thead><tr><th>구간</th><th>인증/자격</th><th>설명</th></tr></thead>
+        <tbody>
+          <tr><td>클라이언트 → APIM</td><td>Entra 토큰(<code>access_as_user</code>)</td><td>APIM <code>validate-jwt</code> + <code>scp</code> 분할 검사 통과 필요</td></tr>
+          <tr><td>APIM → Easy Auth → MCP</td><td>동일 토큰 + <code>x-ms-client-principal*</code></td><td>호출자 신원이 MCP 서버로 전파</td></tr>
+          <tr><td>MCP → DRM API</td><td><code>drm-api-key</code>(Key Vault) 또는 OBO</td><td>복호화 요청. 키는 Container App 시크릿/Key Vault에서 주입</td></tr>
+        </tbody>
+      </table>
+      <div class="warn">
+        <span class="tag">DRM 복호화 주의</span>
+        복호화 결과는 민감 데이터입니다. ① 전 구간 TLS, ② 호출자 신원(<code>x-ms-client-principal-id</code>) 기반 인가·감사 로깅,
+        ③ 복호화 데이터의 로그/캐시 금지, ④ DRM 키는 Key Vault + 관리 ID로만 접근을 권장합니다.
+      </div>
+
+      <!-- 9 -->
+      <h2 id="discovery">9. OAuth 디스커버리 &amp; DCR</h2>
+      <p>
+        OAuth를 인지하는 MCP 클라이언트(예: Copilot Studio 동적 등록)는 인증 요건을 자동 발견할 수 있도록
+        두 개의 <strong>비인증 메타데이터 엔드포인트</strong>가 제공됩니다.
+      </p>
+      <table>
+        <thead><tr><th>엔드포인트</th><th>표준</th><th>핵심 응답</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>/.well-known/oauth-protected-resource</code></td>
+            <td>RFC 9728</td>
+            <td><code>resource: api://clientId</code>, <code>scopes_supported: [access_as_user]</code>, <code>authorization_servers</code></td>
+          </tr>
+          <tr>
+            <td><code>/.well-known/oauth-authorization-server</code></td>
+            <td>RFC 8414</td>
+            <td>Entra의 <code>authorization_endpoint</code>·<code>token_endpoint</code>·<code>jwks_uri</code>, <code>code_challenge_methods: [S256]</code></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="muted">
+        401 응답의 <code>WWW-Authenticate</code> 헤더가 클라이언트를 이 디스커버리 경로와 <code>authorization_uri</code>로 유도하여,
+        PKCE 기반 Authorization Code 흐름을 자동으로 시작하게 합니다.
+      </p>
+
+      <!-- 10 -->
+      <h2 id="pitfalls">10. 알려진 함정과 진단</h2>
+      <div class="warn">
+        <span class="tag">함정 1 — 토큰 버전 불일치(403)</span>
+        앱 등록이 v1 토큰을 발급(<code>requestedAccessTokenVersion=null</code>)하면 Easy Auth issuer(v2.0)와 불일치로 403.
+        <br /><strong>해결:</strong> Microsoft Graph로 <code>api.requestedAccessTokenVersion = 2</code> 패치 → 토큰이
+        <code>iss=…/v2.0</code>, <code>aud=&lt;clientId&gt;</code>로 발급됨.
+      </div>
+      <div class="warn">
+        <span class="tag">함정 2 — MSAL 토큰 캐시</span>
+        Azure CLI/MSAL이 옛 v1 토큰을 캐시합니다. 앱 등록 패치 후에도 403이 지속되면 새 토큰을 강제 발급하세요.
+        <br /><code>rm</code>로 <code>~/.azure/msal_token_cache.json</code>의 AccessToken 항목 정리 후 재시도.
+      </div>
+      <div class="ok">
+        <span class="tag">정상 동작 확인 방법</span>
+        <pre style="margin:0.5rem 0 0;"><code># 1) 사용자 토큰 발급
+az account get-access-token --scope "api://&lt;clientId&gt;/.default" --query accessToken -o tsv
+
+# 2) 라이브 /mcp 호출 (get_current_user)
+curl -s -X POST "https://&lt;fqdn&gt;/mcp" \
+  -H "Authorization: Bearer $TOK" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call",
+       "params":{"name":"get_current_user","arguments":{}}}'
+# → authenticated:true, identityProvider:"aad", upn 표시되면 인증 성공</code></pre>
+      </div>
+      <div class="note">
+        <span class="tag">진단 팁</span>
+        <ul style="margin:0.3rem 0;">
+          <li><code>/.auth/me</code>는 토큰 저장소 비활성화 시 인증이 정상이어도 403 → <strong>무시</strong>하고 <code>/mcp</code>+<code>get_current_user</code>로 검증.</li>
+          <li>토큰 없음 / 잘못된 aud(Graph·ARM 토큰) / 가짜 JWT → <code>AllowAnonymous</code>로 200(익명). aud가 맞는 토큰만 실제 검증.</li>
+          <li><code>allowedApplications:[]</code>은 ARM이 주입하는 기본값으로 “테넌트 전체 허용”을 의미(제한 아님).</li>
+        </ul>
+      </div>
+
+      <footer class="page">
+        <p>
+          생성 문서 · LGUP M365 MCP · 인증 아키텍처 가이드. 구성 출처:
+          <code>modules/gateway.bicep</code>, <code>modules/application.bicep</code>, <code>app/src/index.ts</code>.
+          화면 우상단 테마는 <span class="kbd">?scoutTheme=dark</span> / <span class="kbd">light</span> 쿼리로 전환할 수 있습니다.
+        </p>
+      </footer>
+    </div>
+
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+      const theme = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "neutral";
+      mermaid.initialize({ startOnLoad: true, theme, securityLevel: "loose", flowchart: { curve: "basis" } });
+    </script>
+  </body>
+</html>
