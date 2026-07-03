@@ -5,25 +5,56 @@ cd "$(dirname "$0")"
 
 usage() {
   cat <<'USAGE'
-Usage: ./deploy-app.sh [--param-file FILE] [--deployment-name NAME] [--resource-group NAME] [--container-app NAME] [--registry-name NAME] [--image IMAGE] [--build-context DIR] [--skip-build]
+Usage: ./deploy-app.sh [OPTIONS]
 
-Environment variables:
-  SUBSCRIPTION_ID       Optional; if set, az account set --subscription is executed
-  PARAM_FILE            Optional; same as --param-file
-  DEPLOYMENT_NAME       Optional; same as --deployment-name
-  RESOURCE_GROUP_NAME   Optional; same as --resource-group
-  CONTAINER_APP_NAME    Optional; same as --container-app
-  CONTAINER_REGISTRY_NAME Optional; same as --registry-name
-  CONTAINER_IMAGE       Optional; same as --image
-  BUILD_CONTEXT         Optional; same as --build-context (default: ./app)
-  SKIP_BUILD            Optional; set to true to skip ACR build/push
+Options:
+  --param-file FILE         Bicep parameter file (fallback for missing values)
+  --deployment-name NAME    Bicep deployment name (fallback lookup only)
+  --resource-group NAME     Target resource group name (required)
+  --container-app NAME      Container App name (required)
+  --registry-name NAME      ACR name (required)
+  --image IMAGE             Full or short container image reference (required)
+  --managed-identity-id ID  User-assigned managed identity resource ID (required)
+  --build-context DIR       Docker build context directory (default: ./app)
+  --skip-build              Skip ACR build/push (use existing image)
+  -h, --help                Show this help message
+
+Environment variables (same precedence as CLI options):
+  SUBSCRIPTION_ID           Optional; if set, az account set --subscription is executed
+  PARAM_FILE                Optional; same as --param-file
+  DEPLOYMENT_NAME           Optional; same as --deployment-name
+  RESOURCE_GROUP_NAME       Optional; same as --resource-group
+  CONTAINER_APP_NAME        Optional; same as --container-app
+  CONTAINER_REGISTRY_NAME   Optional; same as --registry-name
+  CONTAINER_IMAGE           Optional; same as --image
+  MANAGED_IDENTITY_ID       Optional; same as --managed-identity-id
+  BUILD_CONTEXT             Optional; same as --build-context (default: ./app)
+  SKIP_BUILD                Optional; set to true to skip ACR build/push
+
+Value resolution order (first wins):
+  1. CLI arguments
+  2. Environment variables
+  3. Bicep parameter file (--param-file)
+  4. Bicep deployment outputs (--deployment-name, fallback only)
 
 Behavior:
-  - Uses main.local.bicepparam by default when present, otherwise main.dev.bicepparam.
-  - Reads ACR name / target image from CLI, environment variables, or the parameter file.
+  - All required values can be supplied directly via CLI/env vars without any Bicep dependency.
+  - When values are missing, falls back to parameter file or Bicep deployment outputs.
   - Builds and pushes the image to the pre-created ACR unless --skip-build is used.
   - Configures the existing Container App to use the pre-created ACR via its user-assigned identity.
   - Safe to rerun: it rebuilds/pushes the same image tag and reapplies the same registry/image settings.
+
+Examples:
+  # PRD: all values explicit, no Bicep dependency
+  ./deploy-app.sh \
+    --resource-group rg-ms-azure-ax-prd \
+    --container-app lgmcp-prd-mcp-api \
+    --registry-name lgmcpprdacr \
+    --image hanik-mcp-server:2.0.0 \
+    --managed-identity-id /subscriptions/.../resourceGroups/.../providers/Microsoft.ManagedIdentity/userAssignedIdentities/lgmcp-prd-uami
+
+  # DEV: resolve from Bicep deployment outputs
+  ./deploy-app.sh --param-file main.dev.bicepparam
 USAGE
 }
 
@@ -91,6 +122,7 @@ RESOURCE_GROUP_NAME="${RESOURCE_GROUP_NAME:-}"
 CONTAINER_APP_NAME="${CONTAINER_APP_NAME:-}"
 CONTAINER_REGISTRY_NAME="${CONTAINER_REGISTRY_NAME:-}"
 CONTAINER_IMAGE="${CONTAINER_IMAGE:-}"
+MANAGED_IDENTITY_ID="${MANAGED_IDENTITY_ID:-}"
 BUILD_CONTEXT="${BUILD_CONTEXT:-./app}"
 SKIP_BUILD="$(parse_bool "${SKIP_BUILD:-false}")"
 
@@ -120,6 +152,10 @@ while [[ $# -gt 0 ]]; do
       CONTAINER_IMAGE="$2"
       shift 2
       ;;
+    --managed-identity-id)
+      MANAGED_IDENTITY_ID="$2"
+      shift 2
+      ;;
     --build-context)
       BUILD_CONTEXT="$2"
       shift 2
@@ -142,50 +178,49 @@ done
 
 require_command az
 
+# --- Resolve values: CLI/env > param file > Bicep deployment outputs ---
+
+# Parameter file is optional; used only as fallback for missing values.
 if [[ -z "$PARAM_FILE" ]]; then
   if [[ -f main.local.bicepparam ]]; then
     PARAM_FILE="main.local.bicepparam"
-  else
+  elif [[ -f main.dev.bicepparam ]]; then
     PARAM_FILE="main.dev.bicepparam"
   fi
-fi
-
-if [[ ! -f "$PARAM_FILE" ]]; then
-  echo "Error: parameter file not found: $PARAM_FILE" >&2
-  exit 1
 fi
 
 if [[ -n "${SUBSCRIPTION_ID:-}" ]]; then
   az account set --subscription "$SUBSCRIPTION_ID"
 fi
 
-if [[ -z "$RESOURCE_GROUP_NAME" ]]; then
-  RESOURCE_GROUP_NAME="$(parse_string_param "$PARAM_FILE" resourceGroupName)"
+# Fill missing values from parameter file (if available)
+if [[ -n "$PARAM_FILE" && -f "$PARAM_FILE" ]]; then
+  [[ -z "$RESOURCE_GROUP_NAME" ]] && RESOURCE_GROUP_NAME="$(parse_string_param "$PARAM_FILE" resourceGroupName)"
+  [[ -z "$CONTAINER_REGISTRY_NAME" ]] && CONTAINER_REGISTRY_NAME="$(parse_string_param "$PARAM_FILE" containerRegistryName)"
+  [[ -z "$CONTAINER_IMAGE" ]] && CONTAINER_IMAGE="$(parse_string_param "$PARAM_FILE" containerImage)"
 fi
 
-if [[ -z "$CONTAINER_REGISTRY_NAME" ]]; then
-  CONTAINER_REGISTRY_NAME="$(parse_string_param "$PARAM_FILE" containerRegistryName)"
+# Fill missing values from Bicep deployment outputs (fallback for dev/test environments)
+if [[ -z "$CONTAINER_APP_NAME" || -z "$MANAGED_IDENTITY_ID" ]]; then
+  if az deployment sub show --name "$DEPLOYMENT_NAME" --query "name" -o tsv >/dev/null 2>&1; then
+    if [[ -z "$CONTAINER_APP_NAME" ]]; then
+      CONTAINER_APP_NAME="$(
+        az deployment sub show \
+          --name "$DEPLOYMENT_NAME" \
+          --query "properties.outputs.containerAppName.value" \
+          -o tsv 2>/dev/null
+      )" || true
+    fi
+    if [[ -z "$MANAGED_IDENTITY_ID" ]]; then
+      MANAGED_IDENTITY_ID="$(
+        az deployment sub show \
+          --name "$DEPLOYMENT_NAME" \
+          --query "properties.outputs.managedIdentityId.value" \
+          -o tsv 2>/dev/null
+      )" || true
+    fi
+  fi
 fi
-
-if [[ -z "$CONTAINER_IMAGE" ]]; then
-  CONTAINER_IMAGE="$(parse_string_param "$PARAM_FILE" containerImage)"
-fi
-
-if [[ -z "$CONTAINER_APP_NAME" ]]; then
-  CONTAINER_APP_NAME="$(
-    az deployment sub show \
-      --name "$DEPLOYMENT_NAME" \
-      --query "properties.outputs.containerAppName.value" \
-      -o tsv
-  )"
-fi
-
-MANAGED_IDENTITY_ID="$(
-  az deployment sub show \
-    --name "$DEPLOYMENT_NAME" \
-    --query "properties.outputs.managedIdentityId.value" \
-    -o tsv
-)"
 
 require_value "resource group name" "$RESOURCE_GROUP_NAME"
 require_value "container app name" "$CONTAINER_APP_NAME"
@@ -228,12 +263,13 @@ if [[ ! -d "$BUILD_CONTEXT" ]]; then
   exit 1
 fi
 
-echo "Using parameter file: $PARAM_FILE"
+echo "Using parameter file: ${PARAM_FILE:-<none>}"
 echo "Deployment name: $DEPLOYMENT_NAME"
 echo "Resource group: $RESOURCE_GROUP_NAME"
 echo "Container app: $CONTAINER_APP_NAME"
 echo "Registry: $CONTAINER_REGISTRY_SERVER"
 echo "Image: $FULL_CONTAINER_IMAGE"
+echo "Managed identity: $MANAGED_IDENTITY_ID"
 echo "Build context: $BUILD_CONTEXT"
 
 if [[ "$SKIP_BUILD" != "true" ]]; then
