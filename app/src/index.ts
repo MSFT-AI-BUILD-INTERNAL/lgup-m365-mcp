@@ -259,6 +259,16 @@ function requireScope(req: Request, res: Response): boolean {
 app.post("/mcp", async (req: Request, res: Response) => {
   if (!requireScope(req, res)) return;
 
+  const user = resolveCurrentUser(req);
+  console.log("[MCP] Incoming request from:", JSON.stringify({
+    displayName: user.displayName,
+    userPrincipalName: user.userPrincipalName,
+    objectId: user.objectId,
+    tenantId: user.tenantId,
+    scopes: user.scopes,
+    authenticated: user.authenticated,
+  }));
+
   const server = createMcpServer(req);
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
