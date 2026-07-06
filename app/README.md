@@ -8,6 +8,9 @@
 - **포트:** `PORT` 환경변수 (기본 `8080`, Bicep의 `containerPort`와 일치)
 - **도구(tool):** `test_hanik` — 입력 없이 `"test hanik mcp ok"` 텍스트를 반환
 - **헬스 체크:** `GET /health` — Container Apps probe용
+- **인증 테스트 UI:** `GET /auth-ui` — Entra ID 로그인 후 토큰으로 `/mcp` API 호출 테스트
+- **DRM 복호화 테스트 UI:** `GET /drm-ui` — Entra 로그인(게이트)을 먼저 통과한 뒤 파일을 업로드해 DRM/MIP 복호화 API 호출
+- **DRM 프록시 엔드포인트:** `POST /drm/decrypt` — 서버가 HMAC 서명을 계산해 외부 DRM API로 전달(시크릿은 브라우저에 노출되지 않음)
 
 ## 로컬 실행
 
@@ -16,6 +19,55 @@ npm install
 npm run build
 PORT=8080 npm start
 ```
+
+Entra ID 테스트 UI 사용 시 환경변수:
+
+```bash
+export AUTH_TENANT_ID='<tenant-guid>'
+export AUTH_CLIENT_ID='<api-app-client-id>'
+PORT=8080 npm start
+```
+
+브라우저에서 `http://localhost:8080/auth-ui` 접속 후 로그인/호출 테스트.
+
+## DRM 복호화 테스트 UI (`/drm-ui`)
+
+Entra 로그인 화면이 먼저 뜨고, 로그인에 성공해야 DRM 복호화 패널이 표시됩니다.
+시크릿(secretKey 등)은 서버 환경변수로만 사용되며 브라우저로 전달되지 않습니다.
+HMAC 서명 계산과 외부 API 호출은 서버(`POST /drm/decrypt`)에서 수행합니다.
+
+필수 환경변수:
+
+```bash
+# Entra (로그인 게이트용)
+export AUTH_TENANT_ID='<tenant-guid>'
+export AUTH_CLIENT_ID='<api-app-client-id>'
+
+# DRM/MIP decrypt API 자격정보 (커밋 금지, 로컬/시크릿 스토어에서 주입)
+export DRM_HOST='seulgiapi.lguplus.co.kr'
+export DRM_CLIENT_ID='<x-client-id>'
+export DRM_KEY_ID='<x-key-id>'
+export DRM_SECRET_KEY='<hmac-secret>'
+export DRM_USER_EMAIL='<user-email>'
+export DRM_USER_LOGINID='<user-loginId>'
+
+PORT=8080 npm start
+```
+
+테스트 절차:
+
+1. 브라우저에서 `http://localhost:8080/drm-ui` 접속 → Entra 로그인.
+2. 로그인 성공 후 파일을 선택하고 `Decrypt 호출`.
+3. 서버가 `host;clientId;keyId;timestamp;email;loginId` 문자열을 `DRM_SECRET_KEY`로 HMAC-SHA256 서명하여 `https://<DRM_HOST>/v1/mip/decrypt`로 파일을 전달하고, 복호화 결과는 브라우저에서 다운로드됩니다.
+
+## Entra 로그인 + API 호출 UI 테스트 가이드
+
+1. Entra App 등록(SPA)에서 Redirect URI를 추가합니다.
+  - `http://localhost:8080/auth-ui`
+  - 배포 환경도 테스트할 경우 `https://<your-app-domain>/auth-ui`
+2. API 권한에서 `api://<AUTH_CLIENT_ID>/access_as_user` delegated scope를 사용자에게 부여하고 동의(Admin/User consent)합니다.
+3. `/auth-ui`에서 로그인 후 기본 JSON-RPC payload로 `test_hanik` 호출을 테스트합니다.
+4. `Call get_current_user` 버튼으로 전달된 사용자 클레임을 확인합니다.
 
 테스트:
 

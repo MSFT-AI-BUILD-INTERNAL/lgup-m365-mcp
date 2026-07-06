@@ -17,3 +17,10 @@ dist/
 *.private.bicepparam
 *.secrets.bicepparam
 **/main.dev.bicepparam
+
+# Local-only files (not to be committed)
+docs/drm_call.txt
+
+# macOS
+.DS_Store
+**/.DS_Store
