@@ -36,7 +36,7 @@ Examples:
     --resource-group rg-ms-azure-ax-prd \
     --container-app lgmcp-prd-mcp-api \
     --registry-name lgmcpprdacr \
-    --image-name hanik-mcp-server \
+    --image-name lgup-mcp-server \
     --managed-identity-id /subscriptions/.../resourceGroups/.../providers/Microsoft.ManagedIdentity/userAssignedIdentities/lgmcp-prd-uami
 
   # Deploy existing latest image (skip build)
@@ -44,7 +44,7 @@ Examples:
     --resource-group rg-ms-azure-ax-prd \
     --container-app lgmcp-prd-mcp-api \
     --registry-name lgmcpprdacr \
-    --image-name hanik-mcp-server \
+    --image-name lgup-mcp-server \
     --managed-identity-id /subscriptions/.../resourceGroups/.../providers/Microsoft.ManagedIdentity/userAssignedIdentities/lgmcp-prd-uami \
     --skip-build
 USAGE

@@ -1,7 +1,7 @@
 {
-  "name": "hanik-mcp-server",
+  "name": "lgup-mcp-server",
   "version": "1.1.0",
-  "description": "Minimal MCP server that returns 'test hanik mcp ok'. Deployable to Azure via Bicep (Container Apps).",
+  "description": "Minimal MCP server that returns 'test lgup mcp ok'. Deployable to Azure via Bicep (Container Apps).",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

@@ -223,7 +223,7 @@ echo "APIM Gateway: $APIM_URL"
 
 ```bash
 curl -s "$APIM_URL/health" | jq .
-# 기대 응답: { "status": "ok", "server": "hanik-mcp-server", "version": "1.0.0" }
+# 기대 응답: { "status": "ok", "server": "lgup-mcp-server", "version": "1.0.0" }
 ```
 
 ### 4-2. OAuth Protected Resource Metadata (RFC 9728)
@@ -347,7 +347,7 @@ MCP Tool 생성 후 Copilot Studio가 **Redirect URL**을 자동 생성합니다
 ### 5-8. 에이전트에서 Tool 활성화
 
 MCP Tool 추가 후 사용 가능한 도구 목록이 표시됩니다:
-- `test_hanik`
+- `test_lgup`
 - `get_current_user`
 
 에이전트 **Publish** 후 테스트 진행
@@ -362,7 +362,7 @@ MCP Tool 추가 후 사용 가능한 도구 목록이 표시됩니다:
 2. 첫 호출 시 **Allow** 버튼으로 사용자 인증 동의
 3. 연결이 만료된 경우 **Open connection manager** → **Connect**로 재인증
 4. 테스트 대화:
-   - "테스트 해줘" → `test_hanik` → "test hanik mcp ok"
+   - "테스트 해줘" → `test_lgup` → "test lgup mcp ok"
    - "내 정보 알려줘" → `get_current_user` → 인증된 사용자 정보 반환
 
 ### 6-2. 인증 흐름 확인 포인트
@@ -466,11 +466,11 @@ Copilot Studio Agent
                    │ forward-request
                    ▼
 ┌──────────────────────────────────────────────┐
-│ Container App (hanik-mcp-server)             │
+│ Container App (lgup-mcp-server)             │
 │                                              │
 │  Easy Auth: x-ms-client-principal 헤더 주입   │
 │  Scope 검증 (defence-in-depth)               │
-│  MCP Tools: test_hanik, get_current_user     │
+│  MCP Tools: test_lgup, get_current_user     │
 └──────────────────────────────────────────────┘
 ```
 

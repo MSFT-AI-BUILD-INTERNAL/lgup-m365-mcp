@@ -51,7 +51,7 @@ flowchart LR
 | 레지스트리 | `modules/registry.bicep` | ✅ | 기존 ACR 참조 |
 | 애플리케이션 | `modules/application.bicep` | ✅ | Container Apps + Easy Auth + 시크릿 주입 |
 | 게이트웨이 | `modules/gateway.bicep` | 🟡 | APIM Consumption(공인망). 사내망 도달 불가 |
-| MCP 서버 앱 | `app/src/index.ts` | 🔴(골격) | 툴 2개(`test_hanik`, `get_current_user`)뿐 |
+| MCP 서버 앱 | `app/src/index.ts` | 🔴(골격) | 툴 2개(`test_lgup`, `get_current_user`)뿐 |
 | 스토리지 컨테이너 | — | ⚪ | 현재 스택에서 제거됨(Blob 파이프라인 미구현) |
 | DRM 배선 | `DRM_API_BASE_URL` · `drm-api-key` | 🟡 | env/시크릿만 주입, 호출 코드 없음 |
 | 네트워킹 | — | 🔴 | VNet/PE/온프레미스 연결 전무 |

@@ -193,8 +193,8 @@ az role assignment create \
 ### 6.2 (선택) 애플리케이션 이미지 빌드/푸시
 
 ```bash
-az acr build --registry "$ACR" --image hanik-mcp-server:1.0.0 ./app
-CONTAINER_IMAGE="${ACR_LOGINSERVER}/hanik-mcp-server:1.0.0"
+az acr build --registry "$ACR" --image lgup-mcp-server:1.0.0 ./app
+CONTAINER_IMAGE="${ACR_LOGINSERVER}/lgup-mcp-server:1.0.0"
 # 초기 검증용 기본 이미지로 시작하려면:
 # CONTAINER_IMAGE="mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
 ```

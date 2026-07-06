@@ -40,7 +40,7 @@
   --resource-group rg-ms-azure-ax-prd \
   --container-app lgmcp-prd-mcp-api \
   --registry-name lgmcpprdacr \
-  --image-name hanik-mcp-server \
+  --image-name lgup-mcp-server \
   --managed-identity-id "/subscriptions/<subscription-id>/resourceGroups/rg-ms-azure-ax-prd/providers/Microsoft.ManagedIdentity/userAssignedIdentities/lgmcp-prd-uami"
 ```
 
@@ -51,7 +51,7 @@
   --resource-group rg-ms-azure-ax-prd \
   --container-app lgmcp-prd-mcp-api \
   --registry-name lgmcpprdacr \
-  --image-name hanik-mcp-server \
+  --image-name lgup-mcp-server \
   --managed-identity-id "/subscriptions/<subscription-id>/..." \
   --skip-build
 ```
@@ -60,11 +60,11 @@
 
 ```bash
 export RESOURCE_GROUP_NAME="rg-ms-azure-ax-prd"
-export CONTAINER_APP_NAME="lgmcp-prd-mcp-api"
-export CONTAINER_REGISTRY_NAME="lgmcpprdacr"
-export CONTAINER_IMAGE_NAME="hanik-mcp-server"
-export MANAGED_IDENTITY_ID="/subscriptions/<subscription-id>/resourceGroups/rg-ms-azure-ax-prd/providers/Microsoft.ManagedIdentity/userAssignedIdentities/lgmcp-prd-uami"
-export SUBSCRIPTION_ID="<subscription-id>"
+export CONTAINER_APP_NAME="ca-lgup-ax-demo"
+export CONTAINER_REGISTRY_NAME="acrlgupdemo"
+export CONTAINER_IMAGE_NAME="lgup-mcp-server"
+export MANAGED_IDENTITY_ID="/subscriptions/2c73cb50-59c7-431f-a220-08423c087751/resourcegroups/rg-ms-azure-ax-prd/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-lgup-ax-demo"
+export SUBSCRIPTION_ID="2c73cb50-59c7-431f-a220-08423c087751"
 
 ./deploy-app.sh
 ```

@@ -63,7 +63,7 @@ flowchart TB
             APIM["API Management<br/>(Consumption)"]
 
             subgraph CAE["Container Apps Environment"]
-                APP["Container App<br/>MCP/API (hanik-mcp-server)"]
+                APP["Container App<br/>MCP/API (lgup-mcp-server)"]
             end
 
             UAMI["User-Assigned<br/>Managed Identity"]
@@ -250,7 +250,7 @@ az role assignment create \
 ./deploy-app.sh \
   --param-file main.local.bicepparam \
   --registry-name "$ACR_NAME" \
-  --image "${ACR_NAME}.azurecr.io/hanik-mcp-server:1.0.0"
+  --image "${ACR_NAME}.azurecr.io/lgup-mcp-server:1.0.0"
 ```
 
 `deploy-app.sh`는 이미지 업데이트 후 `/health`를 최대 약 100초(20회 × 5초) 검증하며, 실패 시 즉시 종료하고 진단 명령을 출력합니다.
