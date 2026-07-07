@@ -1,27 +1,20 @@
 # syntax=docker/dockerfile:1
+FROM python:3.13-slim
 
-# ---- Build stage ----
-FROM node:20-alpine AS build
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PORT=8080
+
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm install
+# Install dependencies first for better layer caching.
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 
-COPY tsconfig.json ./
+# Copy the application source (src package).
 COPY src ./src
-RUN npm run build
-
-# ---- Runtime stage ----
-FROM node:20-alpine AS runtime
-WORKDIR /app
-ENV NODE_ENV=production
-ENV PORT=8080
-
-COPY package*.json ./
-RUN npm install --omit=dev && npm cache clean --force
-
-COPY --from=build /app/dist ./dist
 
 EXPOSE 8080
-USER node
-CMD ["node", "dist/index.js"]
+
+# Streamable HTTP MCP server + test UIs (FastAPI + official MCP Python SDK).
+CMD ["python", "-m", "src.main"]

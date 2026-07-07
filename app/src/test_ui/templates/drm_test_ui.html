@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DRM Decrypt Test</title>
+  <style>
+    body { font-family: system-ui, "Noto Sans KR", sans-serif; margin: 24px; color: #111; }
+    h1 { font-size: 1.2rem; }
+    fieldset { margin: 12px 0; padding: 12px; border: 1px solid #ccc; }
+    label { display: block; margin: 6px 0 2px; font-size: 0.85rem; color: #555; }
+    input { width: 100%; padding: 6px; font: inherit; }
+    button { padding: 8px 14px; margin: 6px 6px 0 0; font: inherit; cursor: pointer; }
+    #status { margin: 10px 0; font-weight: 600; }
+    pre { background: #f4f4f4; padding: 10px; overflow: auto; max-height: 320px; }
+  </style>
+</head>
+<body>
+  <h1>DRM / MIP Decrypt Test</h1>
+
+  <p id="status">초기화 중…</p>
+
+  <fieldset>
+    <legend>Entra 설정</legend>
+    <label for="tenantId">Tenant ID</label>
+    <input id="tenantId" value="{{TENANT_ID}}" />
+    <label for="clientId">Client ID (SPA App)</label>
+    <input id="clientId" value="{{CLIENT_ID}}" />
+    <label for="scope">Scope</label>
+    <input id="scope" value="{{SCOPE}}" />
+    <button id="loginBtn">Sign in</button>
+    <button id="logoutBtn">Sign out</button>
+  </fieldset>
+
+  <fieldset>
+    <legend>복호화</legend>
+    <label for="file">복호화할 파일 선택</label>
+    <input id="file" type="file" />
+    <button id="decryptBtn">Decrypt 호출</button>
+  </fieldset>
+
+  <label>결과</label>
+  <pre id="result">(no response yet)</pre>
+
+  <script src="/vendor/msal-browser.min.js"></script>
+  <script>
+    // Dead-simple test page: every control is always visible. Nothing is shown
+    // or hidden based on async timing, so there is no flashing/disappearing.
+    var statusEl = document.getElementById("status");
+    var resultEl = document.getElementById("result");
+    var tenantIdEl = document.getElementById("tenantId");
+    var clientIdEl = document.getElementById("clientId");
+    var scopeEl = document.getElementById("scope");
+
+    var msalApp = null;
+    var account = null;
+    var accessToken = null;
+
+    function setStatus(text) { statusEl.textContent = text; }
+
+    function getConfig() {
+      return {
+        tenantId: tenantIdEl.value.trim(),
+        clientId: clientIdEl.value.trim(),
+        scope: scopeEl.value.trim(),
+      };
+    }
+
+    function ensureMsal() {
+      var cfg = getConfig();
+      if (!cfg.tenantId || !cfg.clientId || !cfg.scope) {
+        throw new Error("tenantId/clientId/scope 를 입력하세요.");
+      }
+      if (!msalApp) {
+        msalApp = new msal.PublicClientApplication({
+          auth: {
+            clientId: cfg.clientId,
+            authority: "https://login.microsoftonline.com/" + cfg.tenantId,
+            redirectUri: window.location.origin + window.location.pathname,
+            navigateToLoginRequestUrl: false,
+          },
+          cache: { cacheLocation: "sessionStorage", storeAuthStateInCookie: false },
+        });
+      }
+      return cfg;
+    }
+
+    function signIn() {
+      try {
+        var cfg = ensureMsal();
+        msalApp.loginRedirect({ scopes: [cfg.scope] });
+      } catch (e) {
+        setStatus("로그인 실패: " + (e && e.message ? e.message : e));
+      }
+    }
+
+    function signOut() {
+      try {
+        if (msalApp && account) {
+          msalApp.logoutRedirect({ account: account });
+        }
+      } catch (e) {
+        setStatus("로그아웃 실패: " + (e && e.message ? e.message : e));
+      }
+      account = null;
+      accessToken = null;
+      setStatus("로그아웃됨");
+    }
+
+    async function decrypt() {
+      if (!accessToken) {
+        setStatus("먼저 로그인하세요.");
+        return;
+      }
+      var fileInput = document.getElementById("file");
+      if (!fileInput.files || fileInput.files.length === 0) {
+        setStatus("파일을 선택하세요.");
+        return;
+      }
+      setStatus("복호화 호출 중…");
+      resultEl.textContent = "(calling /drm/decrypt ...)";
+
+      var form = new FormData();
+      form.append("file", fileInput.files[0]);
+
+      var response = await fetch("/drm/decrypt", {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + accessToken },
+        body: form,
+      });
+
+      var contentType = response.headers.get("content-type") || "";
+      if (response.ok && contentType.indexOf("application/json") === -1) {
+        var disposition = response.headers.get("content-disposition") || "";
+        var match = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(disposition);
+        var fileName = match ? decodeURIComponent(match[1]) : "decrypted.bin";
+        var blob = await response.blob();
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        setStatus("복호화 성공 — 다운로드: " + fileName);
+        resultEl.textContent = JSON.stringify({ status: response.status, downloadedAs: fileName }, null, 2);
+        return;
+      }
+
+      var text = await response.text();
+      var parsed = text;
+      try { parsed = JSON.parse(text); } catch (e) {}
+      setStatus(response.ok ? "응답 수신" : "호출 실패 (" + response.status + ")");
+      resultEl.textContent = JSON.stringify({ status: response.status, body: parsed }, null, 2);
+    }
+
+    document.getElementById("loginBtn").addEventListener("click", signIn);
+    document.getElementById("logoutBtn").addEventListener("click", signOut);
+    document.getElementById("decryptBtn").addEventListener("click", function () {
+      decrypt().catch(function (err) {
+        setStatus("호출 실패: " + (err && err.message ? err.message : err));
+      });
+    });
+
+    // On load: complete a redirect sign-in or restore a cached session, then
+    // just update the status line. No screen elements are hidden or revealed.
+    (async function () {
+      // MSAL renews tokens silently via a hidden iframe that loads this same
+      // redirectUri page. If our script ran inside that iframe it would call
+      // acquireTokenSilent again and spawn another iframe -> infinite reload
+      // loop (page "appears then disappears"). Do nothing when framed.
+      if (window.top !== window.self) {
+        return;
+      }
+      try {
+        var cfg = getConfig();
+        if (!cfg.tenantId || !cfg.clientId || !cfg.scope) {
+          setStatus("Entra 설정이 비어 있습니다. 값을 입력한 뒤 Sign in 하세요.");
+          return;
+        }
+        ensureMsal();
+        var resp = await msalApp.handleRedirectPromise();
+        account = (resp && resp.account) || msalApp.getAllAccounts()[0] || null;
+        if (!account) {
+          setStatus("로그인 필요 — Sign in 을 누르세요.");
+          return;
+        }
+        var tokenResp = resp;
+        if (!tokenResp || !tokenResp.accessToken) {
+          tokenResp = await msalApp.acquireTokenSilent({ account: account, scopes: [cfg.scope] });
+        }
+        accessToken = tokenResp.accessToken;
+        setStatus("로그인됨: " + (account.name || account.username));
+        resultEl.textContent = JSON.stringify({
+          account: { username: account.username, name: account.name, tenantId: account.tenantId },
+          scopes: tokenResp.scopes,
+          expiresOn: tokenResp.expiresOn,
+        }, null, 2);
+      } catch (e) {
+        setStatus("자동 로그인 실패 — Sign in 을 누르세요: " + (e && e.message ? e.message : e));
+      }
+    })();
+  </script>
+</body>
+</html>

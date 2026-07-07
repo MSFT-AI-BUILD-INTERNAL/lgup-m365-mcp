@@ -487,3 +487,36 @@ Copilot Studio Agent
 │  • APIM audience 검증용     │    │  • Copilot Studio에 입력    │
 └─────────────────────────────┘    └─────────────────────────────┘
 ```
+
+---
+
+## 부록: 로컬 브라우저 테스트 UI & Python 변형 (2026-07)
+
+Copilot Studio 연동 전에, 서버가 제공하는 **브라우저 테스트 UI**로 Entra 로그인·토큰·MCP 호출을 먼저 점검할 수 있습니다.
+
+| 경로 | 용도 |
+|------|------|
+| `/auth-ui` | Entra 로그인 → Access Token 획득 → `/mcp` JSON-RPC 호출 테스트 |
+| `/drm-ui` | 로그인 게이트 통과 후 파일 업로드로 `/drm/decrypt`(DRM 복호화 프록시) 테스트 |
+| `/auth-ui/config` | UI 프리필용 tenant/client/scope JSON |
+| `/vendor/msal-browser.min.js` | MSAL 번들 로컬 제공(CDN 미의존) |
+
+- 이 UI들은 **MSAL(SPA)** 로 로그인하므로, 🔵 **Server 앱**(또는 테스트용 앱)의 Entra 등록에 **단일 페이지 애플리케이션(SPA)** 플랫폼과 아래 Redirect URI가 필요합니다. (Copilot Studio용 🟠 Client 앱의 **Web** Redirect URI와는 별개입니다.)
+  ```
+  http://localhost:8080/auth-ui
+  http://localhost:8080/drm-ui
+  https://<배포도메인>/auth-ui
+  https://<배포도메인>/drm-ui
+  ```
+- 필요한 환경변수: `AUTH_TENANT_ID`, `AUTH_CLIENT_ID` (미설정 시 UI는 503).
+- DRM 복호화 실호출에는 `DRM_HOST`, `DRM_CLIENT_ID`, `DRM_KEY_ID`, `DRM_SECRET_KEY`, `DRM_USER_EMAIL`, `DRM_USER_LOGINID` 가 필요하며, 시크릿은 서버 환경변수로만 사용됩니다.
+
+### 앱 실행 (Python)
+
+MCP 서버는 **Python**(`app/`, FastAPI + 공식 MCP Python SDK)입니다. 위 Copilot Studio 설정을 그대로 적용할 수 있습니다.
+
+```bash
+cd app && uv venv --python 3.13 && source .venv/bin/activate && uv pip install -r requirements.txt
+export AUTH_TENANT_ID=... AUTH_CLIENT_ID=...
+PORT=8080 python -m src.main
+```

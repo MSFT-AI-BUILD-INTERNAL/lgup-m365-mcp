@@ -177,6 +177,9 @@
     <header>
       <p class="eyebrow">lgup-m365-mcp · Azure Implementation Roadmap</p>
       <h1>Azure 구현 로드맵 — DRM 복호화 · 슬기 연동</h1>
+      <div style="margin:16px 0;padding:12px 16px;border-left:4px solid #0ea5e9;background:rgba(14,165,233,.08);border-radius:8px;font-size:.92rem;line-height:1.55">
+        <strong>최신 반영 (2026-07)</strong> — “현재 자산 인벤토리”가 갱신되었습니다(<code>azure-implementation-roadmap.md</code>). MCP 서버 앱은 골격이 아니라 DDD 구조로 구성되어 있으며, 테스트 UI(<code>/auth-ui</code>·<code>/drm-ui</code>), DRM 프록시(<code>/drm/decrypt</code>), OAuth 디스커버리(<code>/.well-known/oauth-*</code>)가 이미 구현되어 있고, Python 포팅(<code>app-py/</code>)도 존재합니다.
+      </div>
       <p class="lead">
         아키텍처 다이어그램의 <strong>Azure 영역</strong>(MCP/API 진입점 · DRM 호출 · 인증/키 관리 ·
         상암 데이터센터망/슬기 API 연동)을 실제로 구현하기 위한 단계별 로드맵입니다.

@@ -1,0 +1,9 @@
+mcp[cli]>=1.28.0
+fastapi>=0.115
+uvicorn[standard]>=0.30
+httpx>=0.27
+python-multipart>=0.0.9
+# HWP preprocessing: pyhwp enables legacy .hwp (OLE) extraction so both .hwp and
+# .hwpx are supported. pyhwp does not declare its 'six' dependency, so pin it.
+pyhwp>=0.1b15
+six>=1.16

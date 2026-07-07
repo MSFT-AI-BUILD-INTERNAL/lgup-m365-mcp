@@ -366,3 +366,69 @@ az monitor activity-log list \
 - [ ] `/health` 및 APIM `/mcp` 검증
 - [ ] 실제 이미지로 `containerImage` 교체 재배포
 - [ ] 운영 전 보안 강화 항목 반영
+
+---
+
+## 부록: 현행 기능 반영 (2026-07)
+
+> 초기 골격 이후 앱(`app/`)에 추가된 현재 기능을 반영합니다. 배포/검증 시 함께 고려하세요.
+
+### A. 서버 엔드포인트 현황
+
+| 경로 | 메서드 | 인증 | 설명 |
+|------|--------|------|------|
+| `/mcp` | POST | Bearer(`access_as_user`) | Streamable HTTP MCP (도구: `test_lgup`, `get_current_user`) |
+| `/health` | GET | 없음 | 헬스 체크 |
+| `/auth-ui` | GET | 없음(화면 내 로그인) | Entra 로그인 + MCP API 테스트 UI |
+| `/auth-ui/config` | GET | 없음 | UI 프리필용 tenant/client/scope JSON |
+| `/drm-ui` | GET | 없음(로그인 게이트) | 로그인 후 DRM/MIP 복호화 테스트 UI |
+| `/drm/decrypt` | POST | Bearer(`access_as_user`) | 서버측 HMAC 서명 후 외부 DRM API로 프록시 |
+| `/vendor/msal-browser.min.js` | GET | 없음 | MSAL 브라우저 번들 **로컬 제공**(CDN 미의존) |
+| `/.well-known/oauth-protected-resource` | GET | 없음 | RFC 9728 메타데이터 |
+| `/.well-known/oauth-authorization-server` | GET | 없음 | RFC 8414 메타데이터 |
+
+### B. 브라우저 테스트 UI + SPA Redirect URI
+
+`/auth-ui`, `/drm-ui`는 MSAL(브라우저)로 Entra 로그인 후 토큰을 받아 API를 호출하는 테스트 화면입니다. 로그인이 성공하려면 Entra 앱 등록에 **단일 페이지 애플리케이션(SPA)** 플랫폼과 아래 Redirect URI가 필요합니다.
+
+```
+# 로컬
+http://localhost:8080/auth-ui
+http://localhost:8080/drm-ui
+# 배포(컨테이너앱/APIM 도메인)
+https://<도메인>/auth-ui
+https://<도메인>/drm-ui
+```
+
+- Entra: **Expose an API** → `api://<clientId>`, scope `access_as_user` 노출.
+- 환경변수: `AUTH_TENANT_ID`, `AUTH_CLIENT_ID` 필요(미설정 시 UI는 503).
+
+### C. DRM/MIP 복호화 프록시 (`/drm/decrypt`)
+
+브라우저에서 시크릿을 노출하지 않도록 **서버가 HMAC 서명(SEULGI-HMAC-SHA256-V1)** 을 계산해 외부 DRM API(`https://<DRM_HOST>/v1/mip/decrypt`)로 파일을 전달합니다. 시크릿은 **환경변수로만** 주입합니다.
+
+| 환경변수 | 설명 |
+|----------|------|
+| `DRM_HOST` | DRM API 호스트(기본 `seulgiapi.lguplus.co.kr`) |
+| `DRM_CLIENT_ID` | `x-client-id` |
+| `DRM_KEY_ID` | `x-key-id` |
+| `DRM_SECRET_KEY` | HMAC 서명 키 |
+| `DRM_USER_EMAIL` | `x-user-email` |
+| `DRM_USER_LOGINID` | `x-user-loginId` |
+
+- 서명 대상 문자열: `host;clientId;keyId;timestamp;email;loginId` (HMAC-SHA256 → base64).
+- 미설정 시 `/drm/decrypt`는 503(안내)로 응답합니다. 실제 자격정보는 Key Vault 등 시크릿 스토어에서 주입하세요.
+
+### D. 로컬 MSAL 번들
+
+사내/CSP 환경에서 외부 CDN 차단으로 인한 "msal is not defined" 문제를 피하기 위해 MSAL 번들을 서버가 `/vendor/msal-browser.min.js`로 직접 제공합니다(TS: `@azure/msal-browser` 로컬 번들, Python: 정적 파일).
+
+### E. 코드 구조(DDD) — Python
+
+- MCP 서버 앱은 **Python**(`app/`, FastAPI + 공식 MCP Python SDK)이며 DDD 바운디드 컨텍스트로 구성됩니다: `app/src/{identity,mcp_server,drm,oauth,test_ui,shared}/`, `main.py`는 조립(Composition Root)만 담당. 브라우저 테스트 UI(`test_ui/`)는 테스트 전용이며 `ENABLE_TEST_UI=1` 일 때만 마운트됩니다(프로덕션에서는 미설정).
+  ```bash
+  cd app && uv venv --python 3.13 && source .venv/bin/activate && uv pip install -r requirements.txt
+  export AUTH_TENANT_ID=... AUTH_CLIENT_ID=...
+  PORT=8080 python -m src.main
+  ```
+- 컨테이너 배포는 `app/Dockerfile`(python:3.13-slim + uvicorn)로 이미지를 빌드하며, Bicep/APIM 설정은 그대로 적용됩니다.

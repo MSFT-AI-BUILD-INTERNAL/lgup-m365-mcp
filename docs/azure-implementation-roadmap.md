@@ -51,11 +51,15 @@ flowchart LR
 | 레지스트리 | `modules/registry.bicep` | ✅ | 기존 ACR 참조 |
 | 애플리케이션 | `modules/application.bicep` | ✅ | Container Apps + Easy Auth + 시크릿 주입 |
 | 게이트웨이 | `modules/gateway.bicep` | 🟡 | APIM Consumption(공인망). 사내망 도달 불가 |
-| MCP 서버 앱 | `app/src/index.ts` | 🔴(골격) | 툴 2개(`test_lgup`, `get_current_user`)뿐 |
+| MCP 서버 앱 | `app/` (Python, FastAPI + MCP SDK) | 🟡 | DDD 컨텍스트(`src/{identity,mcp_server,drm,oauth,test_ui,shared}`)로 분리. 툴 `test_lgup`·`get_current_user` + 테스트 UI(`ENABLE_TEST_UI`)·DRM 프록시·OAuth 메타데이터. 실행 `python -m src.main` |
+| 브라우저 테스트 UI | `/auth-ui`, `/drm-ui`, `/auth-ui/config` | ✅ | Entra 로그인 + API/DRM 테스트(SPA Redirect URI 필요) |
+| DRM 복호화 프록시 | `/drm/decrypt` | 🟡 | 서버측 HMAC(SEULGI-HMAC-SHA256) 서명 후 외부 DRM API 프록시. 자격정보는 `DRM_*` env |
+| OAuth 디스커버리 | `/.well-known/oauth-*` | ✅ | RFC 9728 / RFC 8414 구현 |
+| 로컬 MSAL 제공 | `/vendor/msal-browser.min.js` | ✅ | CDN 미의존(사내망 대응) |
 | 스토리지 컨테이너 | — | ⚪ | 현재 스택에서 제거됨(Blob 파이프라인 미구현) |
-| DRM 배선 | `DRM_API_BASE_URL` · `drm-api-key` | 🟡 | env/시크릿만 주입, 호출 코드 없음 |
+| DRM 배선 | `DRM_API_BASE_URL` · `drm-api-key` / `DRM_*` env | 🟡 | 앱의 `/drm/decrypt` 프록시로 호출 코드 존재. 실자격/사내망 도달은 별도 |
 | 네트워킹 | — | 🔴 | VNet/PE/온프레미스 연결 전무 |
-| 문서 | `docs/*-deployment-guide.*` | 🟡 | 인프라 배포 중심, DRM/슬기 흐름 미반영 |
+| 문서 | `docs/*-deployment-guide.*`, `copilot-studio-oauth2-guide.md` | 🟡 | 현행 기능(테스트 UI·DRM 프록시·Python 변형) 부록 반영됨 |
 
 ---
 
