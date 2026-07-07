@@ -354,7 +354,7 @@
       <div class="meta-grid">
         <div class="meta"><span>현재 런타임</span><strong>Azure Container Apps</strong></div>
         <div class="meta"><span>MCP 서버</span><strong>Node.js / TypeScript, Streamable HTTP</strong></div>
-        <div class="meta"><span>테스트 도구</span><strong><code>test_hanik</code> -&gt; <code>test hanik mcp ok</code></strong></div>
+        <div class="meta"><span>테스트 도구</span><strong><code>test_lgup</code> -&gt; <code>test lgup mcp ok</code></strong></div>
         <div class="meta"><span>검증일</span><strong>2026-06-22</strong></div>
       </div>
       <nav class="toc" aria-label="문서 섹션">
@@ -376,7 +376,7 @@
           <div class="card">
             <span class="status ok">확인 완료</span>
             <h3>MCP 앱 동작</h3>
-            <p><code>app/src/index.ts</code>는 <code>POST /mcp</code>에서 Streamable HTTP MCP 요청을 받고, <code>test_hanik</code> 도구가 고정 응답을 반환합니다.</p>
+            <p><code>app/src/index.ts</code>는 <code>POST /mcp</code>에서 Streamable HTTP MCP 요청을 받고, <code>test_lgup</code> 도구가 고정 응답을 반환합니다.</p>
           </div>
           <div class="card">
             <span class="status ok">수정 완료</span>
@@ -386,7 +386,7 @@
           <div class="card">
             <span class="status ok">배포 완료</span>
             <h3>실제 Azure 배포</h3>
-            <p><code>lgup-rg</code>에 전체 리소스를 배포하고, 공개 엔드포인트에서 <code>test hanik mcp ok</code> 응답을 검증했습니다.</p>
+            <p><code>lgup-rg</code>에 전체 리소스를 배포하고, 공개 엔드포인트에서 <code>test lgup mcp ok</code> 응답을 검증했습니다.</p>
           </div>
         </div>
 
@@ -401,9 +401,9 @@
           </thead>
           <tbody>
             <tr>
-              <td>MCP가 간단히 <code>test hanik mcp ok</code> 반환</td>
+              <td>MCP가 간단히 <code>test lgup mcp ok</code> 반환</td>
               <td><span class="status ok">충족</span></td>
-              <td><code>test_hanik</code> 도구가 입력 없이 고정 텍스트를 반환하며, 로컬과 배포 엔드포인트 양쪽 <code>tools/call</code>로 검증했습니다.</td>
+              <td><code>test_lgup</code> 도구가 입력 없이 고정 텍스트를 반환하며, 로컬과 배포 엔드포인트 양쪽 <code>tools/call</code>로 검증했습니다.</td>
             </tr>
             <tr>
               <td>Bicep으로 <code>lgup-rg</code>와 하위 리소스 배포</td>
@@ -453,7 +453,7 @@
             <div class="lane-title">Runtime</div>
             <div class="node"><strong>API Management (Consumption)</strong><span>Entra Bearer 토큰 게이트웨이, <code>/mcp</code> 프록시</span></div>
             <div class="node"><strong>Azure Container Apps</strong><span>외부 Ingress, target port 8080</span></div>
-            <div class="node"><strong>hanik-mcp-server</strong><span><code>test_hanik</code> tool, <code>/health</code>, <code>/mcp</code></span></div>
+            <div class="node"><strong>lgup-mcp-server</strong><span><code>test_lgup</code> tool, <code>/health</code>, <code>/mcp</code></span></div>
           </div>
           <div class="arrow">-&gt;</div>
           <div class="lane">
@@ -522,7 +522,7 @@
 Response:
 {
   "status": "ok",
-  "server": "hanik-mcp-server",
+  "server": "lgup-mcp-server",
   "version": "1.0.0"
 }</pre>
 
@@ -566,13 +566,13 @@ Accept: application/json, text/event-stream
   "id": 3,
   "method": "tools/call",
   "params": {
-    "name": "test_hanik",
+    "name": "test_lgup",
     "arguments": {}
   }
 }
 
 Expected content text:
-"test hanik mcp ok"</pre>
+"test lgup mcp ok"</pre>
 
         <h3>현재 서버의 의도된 제약</h3>
         <table>
@@ -611,13 +611,13 @@ PORT=8080 npm start</pre>
 curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test_hanik","arguments":{}}}'</pre>
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test_lgup","arguments":{}}}'</pre>
 
         <h3>4-2. 이미지 준비 (ACR 클라우드 빌드)</h3>
         <pre># 1차 배포로 ACR 등 인프라 생성 후, 그 ACR에 이미지 빌드/푸시
-az acr build --registry &lt;acrName&gt; --image hanik-mcp-server:1.0.0 ./app
+az acr build --registry &lt;acrName&gt; --image lgup-mcp-server:1.0.0 ./app
 
-export CONTAINER_IMAGE="&lt;acrName&gt;.azurecr.io/hanik-mcp-server:1.0.0"</pre>
+export CONTAINER_IMAGE="&lt;acrName&gt;.azurecr.io/lgup-mcp-server:1.0.0"</pre>
 
         <h3>4-3. 구독 스코프 Bicep 배포</h3>
         <pre>az login
@@ -643,12 +643,12 @@ echo "$APP_URL"</pre>
 curl -s -X POST "$APP_URL/mcp" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test_hanik","arguments":{}}}'</pre>
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test_lgup","arguments":{}}}'</pre>
 
         <div class="callout ok">
           <strong>실제 배포 결과 (2026-06-22)</strong>
           엔드포인트 <code>https://lgmcp-dev-mcp-api.gentledune-e80525cb.koreacentral.azurecontainerapps.io/mcp</code>에서
-          <code>tools/call test_hanik</code> 호출 시 <code>test hanik mcp ok</code> 응답을 확인했습니다.
+          <code>tools/call test_lgup</code> 호출 시 <code>test lgup mcp ok</code> 응답을 확인했습니다.
         </div>
       </section>
 
@@ -716,8 +716,8 @@ curl -s -X POST "$APP_URL/mcp" \
         <ol>
           <li>서버 URL은 <code>https://&lt;container-app-fqdn&gt;/mcp</code> 한 개입니다.</li>
           <li>전송 방식은 Streamable HTTP입니다. 클라이언트는 <code>Accept: application/json, text/event-stream</code>을 보낼 수 있어야 합니다.</li>
-          <li>도구 목록에서 <code>test_hanik</code>가 보여야 합니다.</li>
-          <li>도구 호출 결과의 텍스트가 <code>test hanik mcp ok</code>이면 서버 연결은 성공입니다.</li>
+          <li>도구 목록에서 <code>test_lgup</code>가 보여야 합니다.</li>
+          <li>도구 호출 결과의 텍스트가 <code>test lgup mcp ok</code>이면 서버 연결은 성공입니다.</li>
           <li>운영 전에는 무인증 서버를 그대로 노출하지 말고 Entra ID/OAuth 또는 APIM 보호를 추가합니다.</li>
         </ol>
       </section>
@@ -773,7 +773,7 @@ curl -s -X POST "$APP_URL/mcp" \
             <tr>
               <td><code>lgmcp-dev-mcp-api</code></td>
               <td>Container App</td>
-              <td>MCP 서버(<code>hanik-mcp-server</code>) 컨테이너를 실행. 외부 HTTPS Ingress로 <code>/mcp</code>와 <code>/health</code>를 노출하고 <code>test_hanik</code> 도구를 제공.</td>
+              <td>MCP 서버(<code>lgup-mcp-server</code>) 컨테이너를 실행. 외부 HTTPS Ingress로 <code>/mcp</code>와 <code>/health</code>를 노출하고 <code>test_lgup</code> 도구를 제공.</td>
               <td>Copilot Studio가 호출할 MCP 엔드포인트 제공</td>
             </tr>
             <tr>
@@ -785,7 +785,7 @@ curl -s -X POST "$APP_URL/mcp" \
             <tr>
               <td><code>lgmcpdevacr…</code></td>
               <td>Container Registry (ACR)</td>
-              <td>MCP 컨테이너 이미지(<code>hanik-mcp-server:1.0.0</code>)를 저장. 관리 ID의 <code>AcrPull</code> 권한으로 비공개 pull.</td>
+              <td>MCP 컨테이너 이미지(<code>lgup-mcp-server:1.0.0</code>)를 저장. 관리 ID의 <code>AcrPull</code> 권한으로 비공개 pull.</td>
               <td>신뢰된 비공개 이미지 배포 원본 확보</td>
             </tr>
             <tr>
@@ -847,7 +847,7 @@ curl -s -X POST "$APP_URL/mcp" \
             <tr><td>게이트웨이 MCP URL</td><td><code>https://&lt;apim&gt;.azure-api.net/mcp</code></td></tr>
             <tr><td>인증</td><td>Entra Bearer 토큰 필수</td></tr>
             <tr><td>토큰 없음/오류</td><td>HTTP 401 (차단)</td></tr>
-            <tr><td>유효한 토큰</td><td>Container App으로 프록시 후 <code>test hanik mcp ok</code> 반환</td></tr>
+            <tr><td>유효한 토큰</td><td>Container App으로 프록시 후 <code>test lgup mcp ok</code> 반환</td></tr>
             <tr><td>SSE 처리</td><td><code>buffer-response="false"</code> 정책으로 Streamable HTTP 응답 통과</td></tr>
           </tbody>
         </table>
@@ -858,7 +858,7 @@ curl -s -X POST "$APP_URL/mcp" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -H "Authorization: Bearer &lt;ENTRA_ACCESS_TOKEN&gt;" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test_hanik","arguments":{}}}'</pre>
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test_lgup","arguments":{}}}'</pre>
         <div class="callout warn">
           <strong>완전 사설(private) 네트워킹 업그레이드 경로</strong>
           현재 게이트웨이는 공개 엔드포인트 + Entra Bearer 토큰 방식입니다. 완전한 VNet private이 필요하면 APIM을 Standard v2/Premium으로 올려

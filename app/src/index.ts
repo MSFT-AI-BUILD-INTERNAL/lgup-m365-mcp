@@ -2,7 +2,7 @@ import express, { type Request, type Response } from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
-const SERVER_NAME = "hanik-mcp-server";
+const SERVER_NAME = "lgup-ax-mcp-server";
 const SERVER_VERSION = "1.0.0";
 
 // Port is configurable so the Bicep-deployed Container App can inject containerPort (default 8080).
@@ -103,11 +103,11 @@ function createMcpServer(req: Request): McpServer {
     version: SERVER_VERSION,
   });
 
-  // Single test tool: always replies with "test hanik mcp ok".
+  // Single test tool: always replies with "test lgup mcp ok".
   server.registerTool(
-    "test_hanik",
+    "test_lgup",
     {
-      title: "Test Hanik",
+      title: "Test LGUP",
       description: "A connectivity test tool that returns a fixed confirmation message.",
       inputSchema: {},
     },
@@ -115,7 +115,7 @@ function createMcpServer(req: Request): McpServer {
       content: [
         {
           type: "text",
-          text: "test hanik mcp ok",
+          text: "test lgup mcp ok",
         },
       ],
     })
@@ -258,6 +258,16 @@ function requireScope(req: Request, res: Response): boolean {
 // Streamable HTTP MCP endpoint (stateless: a new server + transport per request).
 app.post("/mcp", async (req: Request, res: Response) => {
   if (!requireScope(req, res)) return;
+
+  const user = resolveCurrentUser(req);
+  console.log("[MCP] Incoming request from:", JSON.stringify({
+    displayName: user.displayName,
+    userPrincipalName: user.userPrincipalName,
+    objectId: user.objectId,
+    tenantId: user.tenantId,
+    scopes: user.scopes,
+    authenticated: user.authenticated,
+  }));
 
   const server = createMcpServer(req);
   const transport = new StreamableHTTPServerTransport({

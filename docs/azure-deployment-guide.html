@@ -328,7 +328,7 @@ flowchart TB
         subgraph RG["Resource Group: lgup-rg"]
             APIM["API Management<br/>(Consumption)"]
             subgraph CAE["Container Apps Environment"]
-                APP["Container App<br/>MCP/API (hanik-mcp-server)"]
+                APP["Container App<br/>MCP/API (lgup-mcp-server)"]
             end
             UAMI["User-Assigned<br/>Managed Identity"]
             KV["Key Vault"]
@@ -468,7 +468,7 @@ ACR_NAME=$(az deployment sub show -n lgup-mcp-deploy \
   --query "properties.outputs.containerRegistryName.value" -o tsv)
 
 # 2) ACR 클라우드 빌드
-az acr build --registry "$ACR_NAME" --image hanik-mcp-server:1.0.0 ./app
+az acr build --registry "$ACR_NAME" --image lgup-mcp-server:1.0.0 ./app
 
 # 3) containerImage 파라미터를 새 이미지로 바꿔 재배포
 az deployment sub create \
@@ -476,7 +476,7 @@ az deployment sub create \
   --location koreacentral \
   --template-file main.bicep \
   --parameters main.local.bicepparam \
-  --parameters containerImage="${ACR_NAME}.azurecr.io/hanik-mcp-server:1.0.0" \
+  --parameters containerImage="${ACR_NAME}.azurecr.io/lgup-mcp-server:1.0.0" \
   --parameters \
       clientApplicationSecret="$CLIENT_APPLICATION_SECRET" \
       ngisApiKey="$NGIS_API_KEY" \
