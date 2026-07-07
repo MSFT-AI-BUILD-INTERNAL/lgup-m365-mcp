@@ -15,6 +15,8 @@ from pathlib import Path
 from src.preprocess import cli
 from src.preprocess import core
 
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+
 
 def test_cli_preprocesses_hwpx(sample_hwpx: Path, tmp_path: Path):
     out_dir = tmp_path / "out"
@@ -93,3 +95,21 @@ def test_cli_reports_failure_for_unreadable_hwpx(tmp_path: Path):
 
 def test_cli_without_target_returns_error(capsys):
     assert cli.main(["preprocess"]) == 1
+
+
+def test_cli_preprocesses_real_hwpx_fixture(tmp_path: Path):
+    # A real (public) HWPX trimmed to 3 pages, parsed with the stdlib path.
+    fixture = FIXTURES / "sample_bid_plan_3pages.hwpx"
+    assert fixture.is_file()
+
+    out_dir = tmp_path / "out"
+    exit_code = cli.main(["preprocess", str(fixture), "--out", str(out_dir)])
+
+    assert exit_code == 0
+    record = json.loads((out_dir / (fixture.stem + ".json")).read_text(encoding="utf-8"))
+    assert record["format"] == "hwpx"
+    assert record["char_count"] > 0
+    assert record["block_counts"]["paragraph"] >= 1
+
+    md = (out_dir / (fixture.stem + ".md")).read_text(encoding="utf-8")
+    assert "발주계획" in md
