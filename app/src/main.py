@@ -1,10 +1,19 @@
 """Composition root.
 
-Wires the bounded contexts together behind a single ASGI app:
-  - presentation  : browser test UIs (/auth-ui, /drm-ui, /vendor, /auth-ui/config)
-  - drm           : DRM/MIP decrypt proxy (/drm/decrypt)
-  - oauth         : OAuth discovery metadata (/.well-known/*)
-  - mcp           : Streamable HTTP MCP endpoint (/mcp)
+Wires the bounded contexts together behind a single ASGI app.
+
+Production API/MCP surface (always served):
+  - drm    : DRM/MIP decrypt proxy (POST /drm/decrypt)
+  - oauth  : OAuth discovery metadata (/.well-known/*)
+  - mcp    : Streamable HTTP MCP endpoint (/mcp)
+  - health : liveness/readiness probe (/health)
+
+Dev/test-only frontend (served only when ENABLE_TEST_UI is set):
+  - test_ui : browser test pages (/auth-ui, /drm-ui, /vendor, /auth-ui/config)
+
+The test frontend exists purely to exercise the API/MCP from a browser. Real
+clients call /drm/decrypt and /mcp directly, so the UI stays disabled in
+production.
 """
 
 from __future__ import annotations
@@ -22,10 +31,9 @@ from .identity.caller_identity import resolve_caller_identity
 from .identity.scope_guard import scope_failure_response
 from .mcp_server.server import build_mcp
 from .oauth.metadata_routes import router as oauth_router
-from .presentation.ui_routes import router as ui_router
-from .shared.server_info import PORT, SERVER_NAME, SERVER_VERSION
+from .shared.server_info import ENABLE_TEST_UI, PORT, SERVER_NAME, SERVER_VERSION
 
-logger = logging.getLogger("hanik_mcp")
+logger = logging.getLogger("lgup_mcp")
 
 _mcp = build_mcp()
 _mcp_app = _mcp.streamable_http_app()
@@ -66,9 +74,24 @@ async def enforce_mcp_scope(request: Request, call_next):
     return await call_next(request)
 
 
-app.include_router(ui_router)
 app.include_router(drm_router)
 app.include_router(oauth_router)
+
+# The browser test frontend is dev/test-only and mounted only when explicitly
+# enabled, keeping it cleanly separated from the production API/MCP surface.
+if ENABLE_TEST_UI:
+    from .test_ui.ui_routes import router as test_ui_router
+
+    app.include_router(test_ui_router)
+    logger.warning(
+        "Test UI ENABLED (/auth-ui, /drm-ui, /vendor, /auth-ui/config). "
+        "This is for testing only \u2014 do not enable in production."
+    )
+else:
+    logger.info(
+        "Test UI disabled (production mode). Set ENABLE_TEST_UI=1 to serve the "
+        "browser test pages."
+    )
 
 
 @app.get("/health")

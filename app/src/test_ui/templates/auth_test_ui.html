@@ -125,7 +125,7 @@
             <option>GET</option>
           </select>
           <label for="payload">JSON Body</label>
-          <textarea id="payload">{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test_hanik","arguments":{}}}</textarea>
+          <textarea id="payload">{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test_lgup","arguments":{}}}</textarea>
           <div class="btns" style="margin-top:10px">
             <button id="callBtn" class="alt">Call API</button>
             <button id="userBtn" class="ghost">Call get_current_user</button>
@@ -225,6 +225,9 @@
           clientId: cfg.clientId,
           authority: "https://login.microsoftonline.com/" + cfg.tenantId,
           redirectUri: window.location.origin + window.location.pathname,
+          // Do NOT reload/navigate back to the original request URL after the
+          // redirect returns. That reload makes the page flash and disappear.
+          navigateToLoginRequestUrl: false,
         },
         cache: {
           cacheLocation: "sessionStorage",
@@ -237,18 +240,8 @@
     async function signIn() {
       try {
         const cfg = ensureMsal();
-        const loginResp = await msalApp.loginPopup({ scopes: ["openid", "profile", "email", cfg.scope] });
-        account = loginResp.account;
-        const tokenResp = await msalApp.acquireTokenSilent({
-          account,
-          scopes: [cfg.scope],
-        }).catch(() => msalApp.acquireTokenPopup({ scopes: [cfg.scope] }));
-        accessToken = tokenResp.accessToken;
-        setStatus("인증 성공", true);
-        userState.textContent = account ? String(account.username) : "";
-        tokenView.textContent = maskToken(accessToken);
-        resultEl.textContent = JSON.stringify(buildLoginInfo(loginResp, tokenResp), null, 2);
-        document.getElementById("gotoDrmBtn").hidden = false;
+        // Full-page redirect flow: reliable across browsers (avoids popup/COOP issues).
+        await msalApp.loginRedirect({ scopes: [cfg.scope] });
       } catch (error) {
         setStatus("인증 실패", false);
         resultEl.textContent = String(error && error.message ? error.message : error);
@@ -331,6 +324,40 @@
         resultEl.textContent = String(err && err.message ? err.message : err);
       });
     });
+
+    // On load: complete any popup/redirect auth response so the flow never
+    // dead-ends on a blank/stuck screen.
+    (async () => {
+      // Skip execution inside MSAL's hidden silent-renew iframe (which loads
+      // this same redirectUri page) to avoid an acquireTokenSilent reload loop.
+      if (window.top !== window.self) {
+        return;
+      }
+      try {
+        const cfg = getConfig();
+        if (!cfg.tenantId || !cfg.clientId || !cfg.scope) {
+          setStatus("Entra 설정(Tenant/Client/Scope)이 비어 있습니다. 서버에 AUTH_TENANT_ID/AUTH_CLIENT_ID 환경변수를 설정하거나 위 설정란에 직접 입력한 뒤 로그인하세요.", false);
+          return;
+        }
+        ensureMsal();
+        const resp = await msalApp.handleRedirectPromise();
+        const acct = (resp && resp.account) || msalApp.getAllAccounts()[0];
+        if (!acct) return;
+        account = acct;
+        let tokenResp = resp;
+        if (!tokenResp || !tokenResp.accessToken) {
+          tokenResp = await msalApp.acquireTokenSilent({ account: acct, scopes: [cfg.scope] });
+        }
+        accessToken = tokenResp.accessToken;
+        setStatus("인증 성공", true);
+        userState.textContent = String(account.username);
+        tokenView.textContent = maskToken(accessToken);
+        resultEl.textContent = JSON.stringify(buildLoginInfo(tokenResp, tokenResp), null, 2);
+        document.getElementById("gotoDrmBtn").hidden = false;
+      } catch (error) {
+        setStatus("초기화 오류: " + (error && error.message ? error.message : error), false);
+      }
+    })();
   </script>
 </body>
 </html>

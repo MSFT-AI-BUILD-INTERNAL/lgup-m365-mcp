@@ -1,8 +1,12 @@
-"""Presentation layer — browser-facing test UIs.
+"""Test UI routes — a dev/test-only browser frontend.
 
 Serves the Entra login + MCP API test page, the login-gated DRM decrypt page, a
 small config endpoint, and the MSAL browser bundle (locally, to avoid an
 external CDN dependency).
+
+These pages exist only to exercise the real API (/drm/decrypt) and MCP (/mcp)
+from a browser. They are mounted only when ENABLE_TEST_UI is set and must stay
+disabled in production.
 """
 
 from __future__ import annotations
@@ -10,7 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import APIRouter
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse
 
 from ..shared.entra_settings import load_entra_settings
 from ..shared.server_info import MSAL_BROWSER_PATH
@@ -48,25 +52,16 @@ async def auth_ui_config():
 
 @router.get("/auth-ui", response_class=HTMLResponse)
 async def auth_ui():
+    # Always render the page (even when AUTH_* is not configured) so the user
+    # sees the UI and can enter Entra settings / read on-screen error messages.
     entra = load_entra_settings()
-    if not entra.is_configured:
-        return PlainTextResponse(
-            status_code=503,
-            content="AUTH_CLIENT_ID / AUTH_TENANT_ID environment variables are required for Entra ID test UI.",
-        )
-    return HTMLResponse(
-        _render(_AUTH_TEMPLATE, entra.tenant_id, entra.client_id, entra.delegated_scope_uri)
-    )
+    scope = entra.delegated_scope_uri if entra.client_id else ""
+    return HTMLResponse(_render(_AUTH_TEMPLATE, entra.tenant_id, entra.client_id, scope))
 
 
 @router.get("/drm-ui", response_class=HTMLResponse)
 async def drm_ui():
+    # Always render the page (even when AUTH_* is not configured).
     entra = load_entra_settings()
-    if not entra.is_configured:
-        return PlainTextResponse(
-            status_code=503,
-            content="AUTH_CLIENT_ID / AUTH_TENANT_ID environment variables are required for the DRM test UI.",
-        )
-    return HTMLResponse(
-        _render(_DRM_TEMPLATE, entra.tenant_id, entra.client_id, entra.delegated_scope_uri)
-    )
+    scope = entra.delegated_scope_uri if entra.client_id else ""
+    return HTMLResponse(_render(_DRM_TEMPLATE, entra.tenant_id, entra.client_id, scope))
