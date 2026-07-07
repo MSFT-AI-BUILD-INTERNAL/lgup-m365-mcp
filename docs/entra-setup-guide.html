@@ -269,6 +269,9 @@
       <header class="page">
         <div class="eyebrow">entra-auth-app-sample</div>
         <h1>Microsoft Entra ID 등록 가이드 — <code>/api/message</code> 호출 성공까지</h1>
+        <div style="margin:16px 0;padding:12px 16px;border-left:4px solid #0ea5e9;background:rgba(14,165,233,.08);border-radius:8px;font-size:.92rem;line-height:1.55">
+          <strong>lgup-m365-mcp 적용 시 (2026-07)</strong> — 아래 절차는 범용 FastAPI+MSAL 샘플(포트 <code>8000</code>, <code>/api/message</code>) 기준입니다. lgup-m365-mcp에 적용할 때는 포트 <strong>8080</strong>, 보호 API는 <code>/mcp</code>, 브라우저 테스트 UI는 <code>/auth-ui</code>·<code>/drm-ui</code>이며 <strong>SPA</strong> Redirect URI로 <code>http://localhost:8080/auth-ui</code>, <code>http://localhost:8080/drm-ui</code>(및 배포 도메인)를 등록하세요. 노출 scope는 <code>access_as_user</code>, Application ID URI는 <code>api://&lt;clientId&gt;</code>입니다.
+        </div>
         <p class="muted">
           FastAPI 백엔드 + MSAL Browser 프론트엔드 샘플에서 로그인과 보호 API 호출이
           성공할 때까지 거친 앱 등록 과정을 단계별로 정리합니다. 실제로 마주친 오류

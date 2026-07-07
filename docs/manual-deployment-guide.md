@@ -463,3 +463,62 @@ az keyvault purge --name "$KV" --location "$LOCATION"
 - **시크릿 평문 노출**: 셸 히스토리/로그에 시크릿이 남지 않도록 주의하세요.
 - **이름 길이/문자 제약**: Key Vault·Storage는 24자 이내, Storage는 소문자+숫자만 허용됩니다.
 - **재현성**: 수동 생성은 드리프트 관리가 어렵습니다. 가능해지면 [main.bicep](../main.bicep)로 IaC 전환을 권장합니다.
+
+---
+
+## 13. 부록: 현행 기능 반영 (2026-07)
+
+초기 골격 이후 추가된 현재 기능을 수동 배포에도 반영하세요.
+
+### 13.1 Container App 환경변수 (현행)
+
+Entra 인증 + 브라우저 테스트 UI + DRM 프록시를 위해 아래 환경변수를 Container App에 주입합니다.
+
+```bash
+az containerapp update \
+  --name <containerapp> --resource-group <rg> \
+  --set-env-vars \
+    AUTH_TENANT_ID=<tenant-guid> \
+    AUTH_CLIENT_ID=<server-app-client-id> \
+    DRM_HOST=seulgiapi.lguplus.co.kr \
+    DRM_CLIENT_ID=secretref:drm-client-id \
+    DRM_KEY_ID=secretref:drm-key-id \
+    DRM_SECRET_KEY=secretref:drm-secret-key \
+    DRM_USER_EMAIL=<user-email> \
+    DRM_USER_LOGINID=<user-loginId>
+```
+
+- DRM 시크릿(`DRM_SECRET_KEY` 등)은 평문 대신 Container App **secret**(`secretref:`) 또는 Key Vault 참조로 주입하세요.
+- `AUTH_*` 미설정 시 `/auth-ui`·`/drm-ui`는 503, `/drm/decrypt`는 DRM_* 미설정 시 503을 반환합니다.
+
+### 13.2 브라우저 테스트 UI + SPA Redirect URI
+
+`/auth-ui`, `/drm-ui` 로그인을 위해 Entra 앱 등록에 **SPA 플랫폼**과 Redirect URI를 추가합니다.
+
+```
+https://<containerapp-fqdn>/auth-ui
+https://<containerapp-fqdn>/drm-ui
+```
+
+### 13.3 엔드포인트 검증(현행)
+
+```bash
+BASE=https://<containerapp-fqdn>
+curl -s $BASE/health
+curl -s -o /dev/null -w '%{http_code}\n' $BASE/auth-ui        # 200 (AUTH_* 설정 시)
+curl -s -o /dev/null -w '%{http_code}\n' $BASE/drm-ui         # 200
+curl -s -o /dev/null -w '%{http_code}\n' -X POST $BASE/mcp    # 401 (토큰 필요)
+curl -s $BASE/.well-known/oauth-protected-resource            # RFC 9728
+```
+
+### 13.4 Python 변형(app-py)
+
+TypeScript(`app/`) 대신 Python 구현(`app-py/`, FastAPI + 공식 MCP SDK)을 배포할 수도 있습니다. 엔드포인트/인증/APIM 정책은 동일합니다.
+
+```bash
+cd app-py && uv venv --python 3.13 && source .venv/bin/activate && uv pip install -e .
+export AUTH_TENANT_ID=... AUTH_CLIENT_ID=...
+PORT=8080 python -m hanik_mcp.main
+```
+
+컨테이너화 시 베이스 이미지만 Python으로 바뀌며(예: `python:3.13-slim` + `uvicorn`), Bicep/APIM/Managed Identity 구성은 그대로 재사용합니다.
