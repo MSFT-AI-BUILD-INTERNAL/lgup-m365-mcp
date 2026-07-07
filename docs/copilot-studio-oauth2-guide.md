@@ -511,12 +511,12 @@ Copilot Studio 연동 전에, 서버가 제공하는 **브라우저 테스트 UI
 - 필요한 환경변수: `AUTH_TENANT_ID`, `AUTH_CLIENT_ID` (미설정 시 UI는 503).
 - DRM 복호화 실호출에는 `DRM_HOST`, `DRM_CLIENT_ID`, `DRM_KEY_ID`, `DRM_SECRET_KEY`, `DRM_USER_EMAIL`, `DRM_USER_LOGINID` 가 필요하며, 시크릿은 서버 환경변수로만 사용됩니다.
 
-### Python 변형(app-py)
+### 앱 실행 (Python)
 
-동일한 MCP 서버가 **Python**(`app-py/`, FastAPI + 공식 MCP Python SDK)으로도 제공됩니다. 엔드포인트/인증/APIM 정책은 TypeScript(`app/`)와 동일하므로 위 Copilot Studio 설정을 그대로 적용할 수 있습니다.
+MCP 서버는 **Python**(`app/`, FastAPI + 공식 MCP Python SDK)입니다. 위 Copilot Studio 설정을 그대로 적용할 수 있습니다.
 
 ```bash
-cd app-py && uv venv --python 3.13 && source .venv/bin/activate && uv pip install -e .
+cd app && uv venv --python 3.13 && source .venv/bin/activate && uv pip install -r requirements.txt
 export AUTH_TENANT_ID=... AUTH_CLIENT_ID=...
-PORT=8080 python -m hanik_mcp.main
+PORT=8080 python -m src.main
 ```

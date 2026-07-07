@@ -423,13 +423,12 @@ https://<도메인>/drm-ui
 
 사내/CSP 환경에서 외부 CDN 차단으로 인한 "msal is not defined" 문제를 피하기 위해 MSAL 번들을 서버가 `/vendor/msal-browser.min.js`로 직접 제공합니다(TS: `@azure/msal-browser` 로컬 번들, Python: 정적 파일).
 
-### E. 코드 구조(DDD) 및 Python 변형
+### E. 코드 구조(DDD) — Python
 
-- `app/`(TypeScript)는 DDD 바운디드 컨텍스트로 구성되어 있습니다: `app/src/{identity,mcp,drm,oauth,presentation,shared}/`, `index.ts`는 조립(Composition Root)만 담당.
-- 동일 기능의 **Python 포팅**이 `app-py/`(FastAPI + 공식 MCP Python SDK)로 제공됩니다.
+- MCP 서버 앱은 **Python**(`app/`, FastAPI + 공식 MCP Python SDK)이며 DDD 바운디드 컨텍스트로 구성됩니다: `app/src/{identity,mcp_server,drm,oauth,test_ui,shared}/`, `main.py`는 조립(Composition Root)만 담당. 브라우저 테스트 UI(`test_ui/`)는 테스트 전용이며 `ENABLE_TEST_UI=1` 일 때만 마운트됩니다(프로덕션에서는 미설정).
   ```bash
-  cd app-py && uv venv --python 3.13 && source .venv/bin/activate && uv pip install -e .
+  cd app && uv venv --python 3.13 && source .venv/bin/activate && uv pip install -r requirements.txt
   export AUTH_TENANT_ID=... AUTH_CLIENT_ID=...
-  PORT=8080 python -m hanik_mcp.main
+  PORT=8080 python -m src.main
   ```
-- 컨테이너 배포 시 이미지 빌드 대상만 바뀔 뿐(엔드포인트/인증/APIM 정책 동일) Bicep/APIM 설정은 그대로 적용됩니다.
+- 컨테이너 배포는 `app/Dockerfile`(python:3.13-slim + uvicorn)로 이미지를 빌드하며, Bicep/APIM 설정은 그대로 적용됩니다.

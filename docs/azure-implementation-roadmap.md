@@ -51,8 +51,7 @@ flowchart LR
 | 레지스트리 | `modules/registry.bicep` | ✅ | 기존 ACR 참조 |
 | 애플리케이션 | `modules/application.bicep` | ✅ | Container Apps + Easy Auth + 시크릿 주입 |
 | 게이트웨이 | `modules/gateway.bicep` | 🟡 | APIM Consumption(공인망). 사내망 도달 불가 |
-| MCP 서버 앱 (TS) | `app/` (DDD 구조) | 🟡 | `identity/mcp/drm/oauth/presentation/shared` 컨텍스트로 분리. 툴 `test_lgup`·`get_current_user` + 테스트 UI·DRM 프록시·OAuth 메타데이터 엔드포인트 포함 |
-| MCP 서버 앱 (Python) | `app-py/` (FastAPI + MCP SDK) | 🟡 | 동일 기능 Python 포팅. `python -m hanik_mcp.main` |
+| MCP 서버 앱 | `app/` (Python, FastAPI + MCP SDK) | 🟡 | DDD 컨텍스트(`src/{identity,mcp_server,drm,oauth,test_ui,shared}`)로 분리. 툴 `test_lgup`·`get_current_user` + 테스트 UI(`ENABLE_TEST_UI`)·DRM 프록시·OAuth 메타데이터. 실행 `python -m src.main` |
 | 브라우저 테스트 UI | `/auth-ui`, `/drm-ui`, `/auth-ui/config` | ✅ | Entra 로그인 + API/DRM 테스트(SPA Redirect URI 필요) |
 | DRM 복호화 프록시 | `/drm/decrypt` | 🟡 | 서버측 HMAC(SEULGI-HMAC-SHA256) 서명 후 외부 DRM API 프록시. 자격정보는 `DRM_*` env |
 | OAuth 디스커버리 | `/.well-known/oauth-*` | ✅ | RFC 9728 / RFC 8414 구현 |
