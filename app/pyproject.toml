@@ -1,0 +1,37 @@
+[project]
+name = "lgup-ax-mcp-server"
+version = "1.1.0"
+description = "MCP server (Python) with Entra login + DRM decrypt test UIs, modeled with DDD bounded contexts."
+requires-python = ">=3.11"
+dependencies = [
+    "mcp[cli]>=1.28.0",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "httpx>=0.27",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+# Test tooling. The DRM-decrypt tests mock HTTP with httpx.MockTransport (no
+# extra dep); the Entra login e2e test needs Playwright + a Chromium browser:
+#   pip install -e '.[dev]' && python -m playwright install chromium
+dev = [
+    "pytest>=8",
+    "playwright>=1.47",
+]
+
+[tool.pytest.ini_options]
+# Tests live outside src (app/tests) and import the app as ``src.*``.
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-ra"
+
+# Run in place (no install needed):
+#   cd app && python -m src.main
+# or: cd app && uvicorn src.main:app --host 0.0.0.0 --port 8080
+# CLIs:
+#   python -m src.preprocess <folder|file> [--out <dir>]
+#   python -m src.drm.cli <encrypted-file> [--out <path>]
+# Tests:
+#   pip install -e '.[dev]' && python -m playwright install chromium
+#   pytest

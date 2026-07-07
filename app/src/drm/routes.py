@@ -17,7 +17,7 @@ from ..identity.scope_guard import scope_failure_response
 from .credentials import load_drm_credentials
 from .decryption_client import EncryptedDocument, decrypt_document
 
-logger = logging.getLogger("hanik_mcp.drm")
+logger = logging.getLogger("lgup_mcp.drm")
 
 router = APIRouter()
 
