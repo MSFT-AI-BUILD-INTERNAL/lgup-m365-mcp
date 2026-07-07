@@ -106,7 +106,10 @@ curl -X POST http://localhost:8080/mcp \
 # HWP/HWPX 전처리 (docs/tool/preprocess_hwp.py 로직 이식)
 python -m src.preprocess <폴더|파일> --out <출력폴더>
 #  → 각 문서를 <name>.md / <name>.json 으로 정제, _summary.json 요약 생성
-#  (.hwp 는 pyhwp/hwp5txt 필요, .hwpx 는 표준 라이브러리만으로 처리)
+#  (.hwp 는 pyhwp/hwp5txt, .hwpx 는 표준 라이브러리 — pyhwp 는 requirements.txt 에 포함되어 둘 다 지원)
+
+# 프로그램적으로 호출 (모듈 API)
+#   from src.preprocess import preprocess_file, preprocess_document, preprocess_path
 
 # DRM 파일 복호화 (환경변수 DRM_* 필요)
 python -m src.drm.cli <암호화파일> --out <출력파일>

@@ -9,8 +9,11 @@ Exercises the ``python -m src.preprocess`` pipeline (ported from
 
 from __future__ import annotations
 
+import importlib.util
 import json
 from pathlib import Path
+
+import pytest
 
 from src.preprocess import cli
 from src.preprocess import core
@@ -113,6 +116,14 @@ def test_cli_preprocesses_real_hwpx_fixture(tmp_path: Path):
 
     md = (out_dir / (fixture.stem + ".md")).read_text(encoding="utf-8")
     assert "발주계획" in md
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("hwp5") is None, reason="pyhwp not installed"
+)
+def test_hwp_extractor_available():
+    # With pyhwp installed, legacy .hwp extraction is wired up (both formats work).
+    assert core.find_hwp5txt() is not None
 
 
 def test_callable_api(sample_hwpx: Path, tmp_path: Path):
