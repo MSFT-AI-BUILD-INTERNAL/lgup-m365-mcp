@@ -77,7 +77,7 @@ async def upload_file(request: Request, file: UploadFile | None = File(default=N
         logger.exception("Blob upload failed")
         return JSONResponse(
             status_code=502,
-            content={"error": "Failed to upload file to Blob Storage.", "detail": str(exc)},
+            content={"error": "Failed to upload file to Blob Storage."},
         )
 
     logger.info(
