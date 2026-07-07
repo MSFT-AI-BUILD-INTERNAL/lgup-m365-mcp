@@ -25,7 +25,7 @@ param integrations = {
   drmApiBaseUrl: 'https://drm.example.com'
 }
 
-param containerImage = 'lgmcpdevacreubidyfnm7le4.azurecr.io/hanik-mcp-server:1.1.0'
+param containerImage = 'lgmcpdevacreubidyfnm7le4.azurecr.io/lgup-mcp-server:1.1.0'
 param containerPort = 8080
 param minReplicas = 1
 param maxReplicas = 2

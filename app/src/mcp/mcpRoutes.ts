@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { requireScope } from "../identity/scopeGuard.js";
+import { resolveCallerIdentity } from "../identity/CallerIdentity.js";
 import { createMcpServer } from "./mcpServer.js";
 
 /**
@@ -13,6 +14,16 @@ import { createMcpServer } from "./mcpServer.js";
 export function registerMcpRoutes(app: Express): void {
   app.post("/mcp", async (req: Request, res: Response) => {
     if (!requireScope(req, res)) return;
+
+    const user = resolveCallerIdentity(req);
+    console.log("[MCP] Incoming request from:", JSON.stringify({
+      displayName: user.displayName,
+      userPrincipalName: user.userPrincipalName,
+      objectId: user.objectId,
+      tenantId: user.tenantId,
+      scopes: user.scopes,
+      authenticated: user.authenticated,
+    }));
 
     const server = createMcpServer(req);
     const transport = new StreamableHTTPServerTransport({

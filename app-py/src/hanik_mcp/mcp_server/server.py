@@ -19,12 +19,12 @@ def build_mcp() -> FastMCP:
     mcp = FastMCP(SERVER_NAME, stateless_http=True)
 
     @mcp.tool(
-        name="test_hanik",
-        title="Test Hanik",
+        name="test_lgup",
+        title="Test LGUP",
         description="A connectivity test tool that returns a fixed confirmation message.",
     )
-    async def test_hanik() -> str:
-        return "test hanik mcp ok"
+    async def test_lgup() -> str:
+        return "test lgup mcp ok"
 
     @mcp.tool(
         name="get_current_user",

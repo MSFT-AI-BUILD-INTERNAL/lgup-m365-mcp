@@ -127,7 +127,7 @@ export function renderAuthTestUiPage(config: { tenantId: string; clientId: strin
             <option>GET</option>
           </select>
           <label for="payload">JSON Body</label>
-          <textarea id="payload">{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test_hanik","arguments":{}}}</textarea>
+          <textarea id="payload">{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test_lgup","arguments":{}}}</textarea>
           <div class="btns" style="margin-top:10px">
             <button id="callBtn" class="alt">Call API</button>
             <button id="userBtn" class="ghost">Call get_current_user</button>

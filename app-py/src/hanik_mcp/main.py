@@ -9,6 +9,8 @@ Wires the bounded contexts together behind a single ASGI app:
 
 from __future__ import annotations
 
+import json
+import logging
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -16,11 +18,14 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from .drm.routes import router as drm_router
+from .identity.caller_identity import resolve_caller_identity
 from .identity.scope_guard import scope_failure_response
 from .mcp_server.server import build_mcp
 from .oauth.metadata_routes import router as oauth_router
 from .presentation.ui_routes import router as ui_router
 from .shared.server_info import PORT, SERVER_NAME, SERVER_VERSION
+
+logger = logging.getLogger("hanik_mcp")
 
 _mcp = build_mcp()
 _mcp_app = _mcp.streamable_http_app()
@@ -43,6 +48,21 @@ async def enforce_mcp_scope(request: Request, call_next):
         failure = scope_failure_response(request.headers.get("authorization"))
         if failure is not None:
             return failure
+        user = resolve_caller_identity(request.headers)
+        logger.info(
+            "[MCP] Incoming request from: %s",
+            json.dumps(
+                {
+                    "displayName": user["displayName"],
+                    "userPrincipalName": user["userPrincipalName"],
+                    "objectId": user["objectId"],
+                    "tenantId": user["tenantId"],
+                    "scopes": user["scopes"],
+                    "authenticated": user["authenticated"],
+                },
+                ensure_ascii=False,
+            ),
+        )
     return await call_next(request)
 
 

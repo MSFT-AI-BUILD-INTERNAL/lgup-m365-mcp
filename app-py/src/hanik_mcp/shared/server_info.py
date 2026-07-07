@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-SERVER_NAME = "hanik-mcp-server"
+SERVER_NAME = "lgup-ax-mcp-server"
 SERVER_VERSION = "1.0.0"
 
 # Port is configurable so the Bicep-deployed Container App can inject containerPort (default 8080).

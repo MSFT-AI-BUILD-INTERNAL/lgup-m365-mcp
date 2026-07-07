@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
  * Shared kernel: process-wide server identity and runtime configuration.
  * Kept intentionally small and stable so every bounded context can depend on it.
  */
-export const SERVER_NAME = "hanik-mcp-server";
+export const SERVER_NAME = "lgup-ax-mcp-server";
 export const SERVER_VERSION = "1.0.0";
 
 // Port is configurable so the Bicep-deployed Container App can inject containerPort (default 8080).

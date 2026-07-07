@@ -16,11 +16,11 @@ export function createMcpServer(req: Request): McpServer {
     version: SERVER_VERSION,
   });
 
-  // Single test tool: always replies with "test hanik mcp ok".
+  // Single test tool: always replies with "test lgup mcp ok".
   server.registerTool(
-    "test_hanik",
+    "test_lgup",
     {
-      title: "Test Hanik",
+      title: "Test LGUP",
       description: "A connectivity test tool that returns a fixed confirmation message.",
       inputSchema: {},
     },
@@ -28,7 +28,7 @@ export function createMcpServer(req: Request): McpServer {
       content: [
         {
           type: "text",
-          text: "test hanik mcp ok",
+          text: "test lgup mcp ok",
         },
       ],
     })

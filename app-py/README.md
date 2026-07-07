@@ -1,4 +1,4 @@
-# hanik-mcp-server (Python)
+# lgup-ax-mcp-server (Python)
 
 TypeScript MCP 서버(`../app`)를 **Python으로 포팅**한 구현입니다. 공식 **MCP Python SDK**(Streamable HTTP)로 MCP 프로토콜을 처리하고, 나머지 엔드포인트는 **FastAPI**로 구현했으며, DDD 바운디드 컨텍스트 구조를 그대로 유지합니다.
 
@@ -15,7 +15,7 @@ src/hanik_mcp/
     caller_identity.py       # ACL: EasyAuth 헤더/Bearer → 도메인 신원
     scope_guard.py           # 스코프 정책 (401/403)
   mcp_server/                # MCP 컨텍스트
-    server.py                # FastMCP + 도구(test_hanik, get_current_user)
+    server.py                # FastMCP + 도구(test_lgup, get_current_user)
   drm/                       # DRM 복호화 컨텍스트
     credentials.py           # DrmCredentials 값객체 (env)
     signature.py             # DrmSignature 값객체 (SEULGI-HMAC-SHA256)
@@ -33,7 +33,7 @@ src/hanik_mcp/
 
 | 경로 | 설명 |
 |------|------|
-| `POST /mcp` | Streamable HTTP MCP 엔드포인트 (도구: `test_hanik`, `get_current_user`) |
+| `POST /mcp` | Streamable HTTP MCP 엔드포인트 (도구: `test_lgup`, `get_current_user`) |
 | `GET /auth-ui` | Entra 로그인 + MCP API 테스트 UI |
 | `GET /drm-ui` | 로그인 게이트 → DRM/MIP 복호화 테스트 UI |
 | `POST /drm/decrypt` | 서버측 HMAC 서명 후 외부 DRM API로 프록시 |
@@ -79,8 +79,8 @@ curl -X POST http://localhost:8080/mcp \
   -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test_hanik","arguments":{}}}'
-# => "test hanik mcp ok"
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test_lgup","arguments":{}}}'
+# => "test lgup mcp ok"
 ```
 
 ## TS 버전과의 동등성

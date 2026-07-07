@@ -358,8 +358,8 @@ ACR_LOGINSERVER=$(az acr show -n "$ACR" --query loginServer -o tsv)</code></pre>
   --scope "$ACR_ID"</code></pre>
 
           <h3>6.2 (선택) 애플리케이션 이미지 빌드/푸시</h3>
-          <pre><code>az acr build --registry "$ACR" --image hanik-mcp-server:1.0.0 ./app
-CONTAINER_IMAGE="${ACR_LOGINSERVER}/hanik-mcp-server:1.0.0"
+          <pre><code>az acr build --registry "$ACR" --image lgup-mcp-server:1.0.0 ./app
+CONTAINER_IMAGE="${ACR_LOGINSERVER}/lgup-mcp-server:1.0.0"
 # 초기 검증용 기본 이미지로 시작하려면:
 # CONTAINER_IMAGE="mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"</code></pre>
         </section>
@@ -473,7 +473,7 @@ az apim api operation create \
   --method GET --url-template "/health"</code></pre>
 
           <h3>8.4 정책: 응답 버퍼링 비활성화 (MCP Streamable HTTP/SSE)</h3>
-          <p>포털 &gt; API Management &gt; APIs &gt; Hanik MCP &gt; All operations &gt; Policies에서 아래 XML을 붙여넣습니다.</p>
+          <p>포털 &gt; API Management &gt; APIs &gt; lgup MCP &gt; All operations &gt; Policies에서 아래 XML을 붙여넣습니다.</p>
           <pre><code>&lt;policies&gt;
   &lt;inbound&gt;&lt;base /&gt;&lt;/inbound&gt;
   &lt;backend&gt;&lt;forward-request buffer-response="false" /&gt;&lt;/backend&gt;
