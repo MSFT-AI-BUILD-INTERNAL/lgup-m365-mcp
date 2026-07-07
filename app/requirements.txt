@@ -3,6 +3,9 @@ fastapi>=0.115
 uvicorn[standard]>=0.30
 httpx>=0.27
 python-multipart>=0.0.9
+# Azure Blob Storage: upload documents before DRM processing.
+azure-storage-blob>=12.20
+azure-identity>=1.17
 # HWP preprocessing: pyhwp enables legacy .hwp (OLE) extraction so both .hwp and
 # .hwpx are supported. pyhwp does not declare its 'six' dependency, so pin it.
 pyhwp>=0.1b15
