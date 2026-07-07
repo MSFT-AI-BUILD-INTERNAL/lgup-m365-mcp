@@ -32,6 +32,7 @@ from .identity.scope_guard import scope_failure_response
 from .mcp_server.server import build_mcp
 from .oauth.metadata_routes import router as oauth_router
 from .shared.server_info import ENABLE_TEST_UI, PORT, SERVER_NAME, SERVER_VERSION
+from .storage.routes import router as upload_router
 
 logger = logging.getLogger("lgup_mcp")
 
@@ -75,6 +76,7 @@ async def enforce_mcp_scope(request: Request, call_next):
 
 
 app.include_router(drm_router)
+app.include_router(upload_router)
 app.include_router(oauth_router)
 
 # The browser test frontend is dev/test-only and mounted only when explicitly

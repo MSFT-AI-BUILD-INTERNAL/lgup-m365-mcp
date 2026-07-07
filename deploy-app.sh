@@ -18,6 +18,8 @@ Options:
   --managed-identity-id ID  User-assigned managed identity resource ID (required)
   --build-context DIR       Docker build context directory (default: ./app)
   --skip-build              Skip ACR build/push (use existing 'latest' image in ACR)
+  --storage-account-url URL Azure Blob Storage account URL (sets AZURE_STORAGE_ACCOUNT_URL env var)
+  --storage-container NAME  Blob container name (default: uploads)
   -h, --help                Show this help message
 
 Environment variables (same precedence as CLI options):
@@ -29,6 +31,8 @@ Environment variables (same precedence as CLI options):
   MANAGED_IDENTITY_ID       Optional; same as --managed-identity-id
   BUILD_CONTEXT             Optional; same as --build-context (default: ./app)
   SKIP_BUILD                Optional; set to true to skip ACR build/push
+  AZURE_STORAGE_ACCOUNT_URL Optional; same as --storage-account-url
+  AZURE_STORAGE_CONTAINER   Optional; same as --storage-container (default: uploads)
 
 Examples:
   # Build and deploy latest image
@@ -100,6 +104,8 @@ CONTAINER_IMAGE_NAME="${CONTAINER_IMAGE_NAME:-}"
 MANAGED_IDENTITY_ID="${MANAGED_IDENTITY_ID:-}"
 BUILD_CONTEXT="${BUILD_CONTEXT:-./app}"
 SKIP_BUILD="$(parse_bool "${SKIP_BUILD:-false}")"
+AZURE_STORAGE_ACCOUNT_URL="${AZURE_STORAGE_ACCOUNT_URL:-}"
+AZURE_STORAGE_CONTAINER="${AZURE_STORAGE_CONTAINER:-uploads}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -125,6 +131,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --build-context)
       BUILD_CONTEXT="$2"
+      shift 2
+      ;;
+    --storage-account-url)
+      AZURE_STORAGE_ACCOUNT_URL="$2"
+      shift 2
+      ;;
+    --storage-container)
+      AZURE_STORAGE_CONTAINER="$2"
       shift 2
       ;;
     --skip-build)
@@ -180,6 +194,10 @@ echo "Image: $FULL_CONTAINER_IMAGE"
 echo "Managed identity: $MANAGED_IDENTITY_ID"
 echo "Build context: $BUILD_CONTEXT"
 echo "Skip build: $SKIP_BUILD"
+if [[ -n "$AZURE_STORAGE_ACCOUNT_URL" ]]; then
+  echo "Storage account URL: $AZURE_STORAGE_ACCOUNT_URL"
+  echo "Storage container: $AZURE_STORAGE_CONTAINER"
+fi
 
 if [[ "$SKIP_BUILD" != "true" ]]; then
   echo "Building and pushing image to ACR (tag: latest)..."
@@ -199,10 +217,22 @@ az containerapp registry set \
   --identity "$MANAGED_IDENTITY_ID" \
   --only-show-errors >/dev/null
 
+UPDATE_ARGS=(
+  --name "$CONTAINER_APP_NAME"
+  --resource-group "$RESOURCE_GROUP_NAME"
+  --image "$FULL_CONTAINER_IMAGE"
+)
+
+if [[ -n "$AZURE_STORAGE_ACCOUNT_URL" ]]; then
+  UPDATE_ARGS+=(
+    --set-env-vars
+    "AZURE_STORAGE_ACCOUNT_URL=$AZURE_STORAGE_ACCOUNT_URL"
+    "AZURE_STORAGE_CONTAINER=$AZURE_STORAGE_CONTAINER"
+  )
+fi
+
 az containerapp update \
-  --name "$CONTAINER_APP_NAME" \
-  --resource-group "$RESOURCE_GROUP_NAME" \
-  --image "$FULL_CONTAINER_IMAGE" \
+  "${UPDATE_ARGS[@]}" \
   --only-show-errors >/dev/null
 
 APP_URL="$(
