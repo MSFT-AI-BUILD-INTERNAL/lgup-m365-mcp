@@ -1,4 +1,4 @@
-"""HWP/HWPX preprocessing CLI.
+"""HWP/HWPX preprocessing CLI — a thin wrapper over :mod:`src.preprocess.service`.
 
 Usage:
     python -m src.preprocess <folder|file> [--out <dir>]
@@ -11,11 +11,10 @@ and an aggregate ``_summary.json``. Exit code 0 if all succeed, 1 otherwise.
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
-from .core import SUPPORTED_SUFFIXES, blocks_to_markdown, process_file
+from .service import collect_inputs, default_output_dir, preprocess_path
 
 
 def parse_cli(argv: list[str]) -> tuple[str | None, str | None]:
@@ -37,24 +36,6 @@ def parse_cli(argv: list[str]) -> tuple[str | None, str | None]:
     return target, out
 
 
-def collect_inputs(target_arg: str | None) -> tuple[list[Path], Path | None]:
-    """Resolve the target: a folder -> its hwp/hwpx files; a file -> that file."""
-    if target_arg is None:
-        return [], None
-
-    target = Path(target_arg)
-    if target.is_dir():
-        files = sorted(
-            p
-            for p in target.iterdir()
-            if p.is_file() and p.suffix.lower() in SUPPORTED_SUFFIXES
-        )
-        return files, target
-    if target.is_file():
-        return [target], target.parent
-    return [], target
-
-
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
     target_arg, out_arg = parse_cli(argv)
@@ -65,8 +46,7 @@ def main(argv: list[str] | None = None) -> int:
         print("  e.g.  python -m src.preprocess ./docs --out ./outputs")
         return 1
 
-    output_dir = Path(out_arg) if out_arg else (base if base.is_dir() else base.parent) / "outputs"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = Path(out_arg) if out_arg else default_output_dir(base)
 
     print("=" * 64)
     print("HWP/HWPX preprocessing")
@@ -77,85 +57,34 @@ def main(argv: list[str] | None = None) -> int:
     if not inputs:
         print("\nNo .hwp / .hwpx files to process.")
         print(f"  -> checked: {base}")
-        return 1
 
-    summary = []
-    success = 0
-    failed = 0
+    # Do all the work through the callable service (writes md/json + _summary.json).
+    summary = preprocess_path(base, output_dir)
 
-    for path in inputs:
-        print(f"\n[target] {path.name}")
-        try:
-            record = process_file(path)
-        except Exception as exc:  # noqa: BLE001 - keep going on per-file failure
-            print(f"    [X] failed: {exc}")
-            summary.append(
-                {"source_file": path.name, "status": "failed", "reason": str(exc)}
+    for entry in summary["files"]:
+        print(f"\n[target] {entry['source_file']}")
+        if entry["status"] == "success":
+            c = entry["block_counts"]
+            print(f"    [OK] {entry['extraction_method']}")
+            print(
+                f"      chars {entry['char_count']:,} / heading {c['heading']}, "
+                f"paragraph {c['paragraph']}, table {c['table']}"
             )
-            failed += 1
-            continue
-
-        stem = path.stem
-        md_path = output_dir / (stem + ".md")
-        json_path = output_dir / (stem + ".json")
-        try:
-            md_path.write_text(
-                blocks_to_markdown(stem, record["blocks"]), encoding="utf-8"
-            )
-            json_path.write_text(
-                json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
-        except OSError as exc:
-            print(f"    [X] failed: write error: {exc}")
-            summary.append(
-                {"source_file": path.name, "status": "failed", "reason": f"write: {exc}"}
-            )
-            failed += 1
-            continue
-
-        c = record["block_counts"]
-        print(f"    [OK] {record['extraction_method']}")
-        print(
-            f"      chars {record['char_count']:,} / heading {c['heading']}, "
-            f"paragraph {c['paragraph']}, table {c['table']}"
-        )
-        summary.append(
-            {
-                "source_file": path.name,
-                "status": "success",
-                "format": record["format"],
-                "extraction_method": record["extraction_method"],
-                "char_count": record["char_count"],
-                "block_counts": c,
-                "outputs": [md_path.name, json_path.name],
-            }
-        )
-        success += 1
-
-    (output_dir / "_summary.json").write_text(
-        json.dumps(
-            {
-                "input": str(base),
-                "total": len(inputs),
-                "success": success,
-                "failed": failed,
-                "files": summary,
-            },
-            ensure_ascii=False,
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
+            print(f"      -> {', '.join(entry['outputs'])}")
+        else:
+            print(f"    [X] failed: {entry['reason']}")
 
     print("\n" + "=" * 64)
     print("Result summary")
-    print(f"  total   : {len(inputs)}")
-    print(f"  success : {success}")
-    print(f"  failed  : {failed}")
-    print(f"  summary : {output_dir / '_summary.json'}")
+    print(f"  total   : {summary['total']}")
+    print(f"  success : {summary['success']}")
+    print(f"  failed  : {summary['failed']}")
+    print(f"  summary : {Path(summary['output_dir']) / '_summary.json'}")
     print("=" * 64)
 
-    return 0 if failed == 0 else 1
+    if summary["total"] == 0:
+        return 1
+    return 0 if summary["failed"] == 0 else 1
 
 
 if __name__ == "__main__":

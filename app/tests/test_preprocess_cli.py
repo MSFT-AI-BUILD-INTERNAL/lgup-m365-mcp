@@ -113,3 +113,27 @@ def test_cli_preprocesses_real_hwpx_fixture(tmp_path: Path):
 
     md = (out_dir / (fixture.stem + ".md")).read_text(encoding="utf-8")
     assert "발주계획" in md
+
+
+def test_callable_api(sample_hwpx: Path, tmp_path: Path):
+    from src.preprocess import preprocess_document, preprocess_file, preprocess_path
+
+    # In-memory: no files written.
+    record = preprocess_file(sample_hwpx)
+    assert record["format"] == "hwpx"
+    assert record["block_counts"]["table"] == 1
+
+    # Single document: writes md/json and reports their paths.
+    out_dir = tmp_path / "doc"
+    doc = preprocess_document(sample_hwpx, out_dir)
+    assert (out_dir / "sample.md").is_file()
+    assert (out_dir / "sample.json").is_file()
+    assert doc["outputs"] == ["sample.md", "sample.json"]
+
+    # Path (file or folder): writes _summary.json and returns the summary.
+    out_dir2 = tmp_path / "path"
+    summary = preprocess_path(sample_hwpx, out_dir2)
+    assert summary["total"] == 1
+    assert summary["success"] == 1
+    assert summary["failed"] == 0
+    assert (out_dir2 / "_summary.json").is_file()
