@@ -29,6 +29,8 @@
 |----------|----------|--------|------|
 | `--build-context` | `BUILD_CONTEXT` | `./app` | Docker 빌드 컨텍스트 디렉토리 |
 | `--skip-build` | `SKIP_BUILD=true` | `false` | ACR 빌드/푸시 건너뛰기 (ACR에 이미 latest 존재 시) |
+| `--storage-account-url` | `AZURE_STORAGE_ACCOUNT_URL` | — | Azure Blob Storage 계정 URL (예: `https://<name>.blob.core.windows.net`) |
+| `--storage-container` | `AZURE_STORAGE_CONTAINER` | `uploads` | Blob Storage 컨테이너 이름 |
 | — | `SUBSCRIPTION_ID` | — | 설정 시 `az account set` 실행 |
 
 ## 배포 예시
@@ -41,7 +43,8 @@
   --container-app lgmcp-prd-mcp-api \
   --registry-name lgmcpprdacr \
   --image-name lgup-mcp-server \
-  --managed-identity-id "/subscriptions/<subscription-id>/resourceGroups/rg-ms-azure-ax-prd/providers/Microsoft.ManagedIdentity/userAssignedIdentities/lgmcp-prd-uami"
+  --managed-identity-id "/subscriptions/<subscription-id>/resourceGroups/rg-ms-azure-ax-prd/providers/Microsoft.ManagedIdentity/userAssignedIdentities/lgmcp-prd-uami" \
+  --storage-account-url "https://lgmcpprdstorage.blob.core.windows.net"
 ```
 
 ### 이미 ACR에 latest 이미지가 있는 경우 (빌드 건너뛰기)
@@ -65,6 +68,8 @@ export CONTAINER_REGISTRY_NAME="acrlgupdemo"
 export CONTAINER_IMAGE_NAME="lgup-mcp-server"
 export MANAGED_IDENTITY_ID="/subscriptions/2c73cb50-59c7-431f-a220-08423c087751/resourcegroups/rg-ms-azure-ax-prd/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-lgup-ax-demo"
 export SUBSCRIPTION_ID="2c73cb50-59c7-431f-a220-08423c087751"
+export AZURE_STORAGE_ACCOUNT_URL="https://mslgupmcpdemostorage.blob.core.windows.net/"
+export AZURE_STORAGE_CONTAINER="data"
 
 ./deploy-app.sh
 ```
@@ -75,8 +80,33 @@ export SUBSCRIPTION_ID="2c73cb50-59c7-431f-a220-08423c087751"
 1. 파라미터 수집 (CLI → 환경변수)
 2. az acr build          → 이미지 빌드 및 ACR 푸시 (latest 태그)
 3. az containerapp registry set → ACR 레지스트리 연결 (UAMI 인증)
-4. az containerapp update       → 컨테이너 이미지 업데이트
+4. az containerapp update       → 컨테이너 이미지 업데이트 + Storage 환경변수 설정
 5. 헬스체크 (curl /health 또는 Azure 상태 폴링)
+```
+
+## Storage Account 설정
+
+Storage 모듈(`/upload` 엔드포인트)을 사용하려면 Azure Blob Storage 계정이 필요합니다.
+
+| 환경변수 | 용도 | 인증 방식 |
+|----------|------|-----------|
+| `AZURE_STORAGE_ACCOUNT_URL` | Storage 계정 URL | Managed Identity (운영) |
+| `AZURE_STORAGE_CONNECTION_STRING` | 연결 문자열 | 키 기반 (로컬 개발) |
+| `AZURE_STORAGE_CONTAINER` | Blob 컨테이너 이름 (기본: `uploads`) | — |
+
+- **운영 환경**: `AZURE_STORAGE_ACCOUNT_URL`만 설정하면 `DefaultAzureCredential`(UAMI)로 인증합니다.
+- **로컬 개발**: `AZURE_STORAGE_CONNECTION_STRING`을 설정하세요.
+- 두 값 모두 미설정 시 `/upload` 엔드포인트는 `503 Service Unavailable`을 반환합니다.
+
+### UAMI 역할 요구사항
+
+Container App에 연결된 User-Assigned Managed Identity에 **Storage Blob Data Contributor** 역할을 부여해야 합니다:
+
+```bash
+az role assignment create \
+  --assignee-object-id <UAMI_PRINCIPAL_ID> \
+  --role "Storage Blob Data Contributor" \
+  --scope "/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.Storage/storageAccounts/<account>"
 ```
 
 ## 사전 조건
@@ -85,6 +115,7 @@ export SUBSCRIPTION_ID="2c73cb50-59c7-431f-a220-08423c087751"
 - Container App에 연결된 **User-Assigned Managed Identity**에 ACR **AcrPull** 역할 부여 완료
 - Container App이 이미 생성되어 있어야 함 (이 스크립트는 앱 업데이트만 수행)
 - ACR이 동일 리소스 그룹에 존재해야 함
+- (Storage 사용 시) UAMI에 **Storage Blob Data Contributor** 역할 부여 완료
 
 ## 사전 조건
 
