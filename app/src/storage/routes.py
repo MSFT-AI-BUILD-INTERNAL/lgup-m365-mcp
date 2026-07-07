@@ -101,7 +101,7 @@ async def upload_file(request: Request, file: UploadFile | None = File(default=N
     except Exception as exc:  # noqa: BLE001
         logger.exception("DRM decrypt proxy error during upload flow")
         return _blob_with_drm_response(
-            blob_result, {"status": "error", "detail": str(exc)}, status_code=502
+            blob_result, {"status": "error", "detail": "DRM decryption request failed."}, status_code=502
         )
 
     if not outcome.ok:
