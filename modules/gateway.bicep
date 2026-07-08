@@ -14,6 +14,9 @@ param authClientId string
 @description('Entra ID tenant ID used by APIM to resolve OpenID metadata.')
 param authTenantId string = ''
 
+@description('When false, /mcp is exposed anonymously (no validate-jwt) — e.g. Copilot Studio "no authentication". Only for trusted/PoC use.')
+param requireMcpAuth bool = true
+
 param tags object
 
 // API Management in Consumption tier: serverless gateway, pay-per-call, fast to provision.
@@ -73,7 +76,7 @@ resource opPostMcpPolicy 'Microsoft.ApiManagement/service/apis/operations/polici
   name: 'policy'
   properties: {
     format: 'xml'
-    value: '<policies><inbound><validate-jwt header-name="Authorization" require-scheme="Bearer" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized. Valid Entra bearer token required."><openid-config url="https://login.microsoftonline.com/${authTenantId}/v2.0/.well-known/openid-configuration" /><audiences><audience>api://${authClientId}</audience><audience>${authClientId}</audience></audiences><required-claims><claim name="scp" match="any"><value>access_as_user</value></claim></required-claims></validate-jwt><base /></inbound><backend><base /></backend><outbound><base /></outbound><on-error><base /></on-error></policies>'
+    value: requireMcpAuth ? '<policies><inbound><validate-jwt header-name="Authorization" require-scheme="Bearer" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized. Valid Entra bearer token required."><openid-config url="https://login.microsoftonline.com/${authTenantId}/v2.0/.well-known/openid-configuration" /><audiences><audience>api://${authClientId}</audience><audience>${authClientId}</audience></audiences><required-claims><claim name="scp" match="any"><value>access_as_user</value></claim></required-claims></validate-jwt><base /></inbound><backend><base /></backend><outbound><base /></outbound><on-error><base /></on-error></policies>' : '<policies><inbound><base /></inbound><backend><base /></backend><outbound><base /></outbound><on-error><base /></on-error></policies>'
   }
 }
 
