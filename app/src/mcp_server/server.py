@@ -3,6 +3,15 @@
 Builds the MCP server (stateless Streamable HTTP) and registers its tools.
 Stateless mode keeps the server simple and horizontally scalable on Azure
 Container Apps, mirroring the original TypeScript implementation.
+
+Transport settings:
+  - json_response=True: Copilot Studio expects plain JSON responses
+    (application/json). SSE streaming causes 406 errors when APIM or
+    the client does not forward `Accept: text/event-stream`.
+  - DNS rebinding protection is DISABLED because the server runs behind
+    Azure APIM / Container Apps ingress which performs Host validation
+    at the network edge. The SDK default (localhost-only) rejects
+    external callers with HTTP 421.
 """
 
 from __future__ import annotations
@@ -10,13 +19,21 @@ from __future__ import annotations
 import json
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from ..identity.caller_identity import resolve_caller_identity
 from ..shared.server_info import SERVER_NAME
 
 
 def build_mcp() -> FastMCP:
-    mcp = FastMCP(SERVER_NAME, stateless_http=True)
+    mcp = FastMCP(
+        SERVER_NAME,
+        stateless_http=True,
+        json_response=True,
+        transport_security=TransportSecuritySettings(
+            enable_dns_rebinding_protection=False,
+        ),
+    )
 
     @mcp.tool(
         name="test_lgup",
