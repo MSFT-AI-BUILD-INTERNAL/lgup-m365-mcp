@@ -31,7 +31,13 @@ from .identity.caller_identity import resolve_caller_identity
 from .identity.scope_guard import scope_failure_response
 from .mcp_server.server import build_mcp
 from .oauth.metadata_routes import router as oauth_router
-from .shared.server_info import ENABLE_TEST_UI, PORT, SERVER_NAME, SERVER_VERSION
+from .shared.server_info import (
+    ALLOW_ANONYMOUS_MCP,
+    ENABLE_TEST_UI,
+    PORT,
+    SERVER_NAME,
+    SERVER_VERSION,
+)
 from .storage.routes import router as upload_router
 
 logger = logging.getLogger("lgup_mcp")
@@ -54,9 +60,12 @@ app = FastAPI(title=SERVER_NAME, version=SERVER_VERSION, lifespan=lifespan)
 async def enforce_mcp_scope(request: Request, call_next):
     # Defence-in-depth scope check on the MCP endpoint (APIM validates the JWT).
     if request.url.path == "/mcp" and request.method == "POST":
-        failure = scope_failure_response(request.headers.get("authorization"))
-        if failure is not None:
-            return failure
+        # When anonymous MCP is enabled (e.g. Copilot Studio "no authentication"),
+        # skip the app-level scope check. APIM must also drop validate-jwt on /mcp.
+        if not ALLOW_ANONYMOUS_MCP:
+            failure = scope_failure_response(request.headers.get("authorization"))
+            if failure is not None:
+                return failure
         user = resolve_caller_identity(request.headers)
         logger.info(
             "[MCP] Incoming request from: %s",

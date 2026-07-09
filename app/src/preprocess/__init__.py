@@ -30,6 +30,7 @@ from .core import (
 from .service import (
     collect_inputs,
     default_output_dir,
+    preprocess_bytes,
     preprocess_document,
     preprocess_file,
     preprocess_path,
@@ -38,6 +39,7 @@ from .service import (
 __all__ = [
     # High-level callable API
     "preprocess_file",
+    "preprocess_bytes",
     "preprocess_document",
     "preprocess_path",
     "collect_inputs",

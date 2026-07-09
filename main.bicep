@@ -82,6 +82,9 @@ param apimPublisherName string = 'LGUP MCP'
 @description('Entra ID application (client) ID used for APIM JWT validation and Container Apps built-in authentication.')
 param authClientId string
 
+@description('When false, /mcp is exposed anonymously (APIM drops validate-jwt) for Copilot Studio "no authentication". Also set ALLOW_ANONYMOUS_MCP=true on the app. Trusted/PoC use only.')
+param requireMcpAuth bool = true
+
 @secure()
 @description('Entra ID application client secret used for Dynamic Client Registration (RFC 7591). Copilot Studio Dynamic mode requires this.')
 param authClientSecret string = ''
@@ -175,6 +178,7 @@ module gateway './modules/gateway.bicep' = {
     containerAppUrl: application.outputs.containerAppUrl
     authClientId: authClientId
     authTenantId: subscription().tenantId
+    requireMcpAuth: requireMcpAuth
     tags: tags
   }
 }

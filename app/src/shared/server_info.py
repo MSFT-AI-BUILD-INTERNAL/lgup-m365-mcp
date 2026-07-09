@@ -27,6 +27,12 @@ def _env_flag(name: str, default: bool = False) -> bool:
 # explicitly enabled. Real clients call the API (/drm/decrypt) and MCP (/mcp).
 ENABLE_TEST_UI = _env_flag("ENABLE_TEST_UI", default=False)
 
+# When true, the MCP endpoint (/mcp) skips the app-level Entra scope check so it
+# can be reached without a bearer token (e.g. Copilot Studio "no authentication"
+# connections). SECURITY: only enable for trusted/PoC gateways — APIM must also
+# drop its validate-jwt on /mcp for anonymous access to reach the app.
+ALLOW_ANONYMOUS_MCP = _env_flag("ALLOW_ANONYMOUS_MCP", default=False)
+
 # The MSAL browser UMD bundle is vendored locally so the test UIs work without an
 # external CDN (which is often blocked on corporate networks).
 STATIC_DIR = Path(__file__).resolve().parent.parent / "test_ui" / "static"

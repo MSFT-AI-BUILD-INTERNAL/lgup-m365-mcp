@@ -15,6 +15,8 @@ from other code:
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from pathlib import Path
 
 from .core import SUPPORTED_SUFFIXES, blocks_to_markdown, process_file
@@ -27,6 +29,34 @@ def preprocess_file(path: str | Path, mip=None) -> dict:
     (unsupported format, DRM without a decryptor, empty content, ...).
     """
     return process_file(Path(path), mip)
+
+
+def preprocess_bytes(data: bytes, filename: str, mip=None) -> dict:
+    """Preprocess in-memory HWP/HWPX bytes and return the structured record.
+
+    The extractors need a real file path, so the bytes are written to a temp
+    file (extension taken from ``filename``), processed, then cleaned up. The
+    returned record's ``source_file`` is restored to the original ``filename``.
+    Raises ``RuntimeError`` on failure.
+    """
+    suffix = Path(filename).suffix.lower()
+    if suffix not in SUPPORTED_SUFFIXES:
+        raise RuntimeError(f"Unsupported format: {suffix or '(none)'}")
+
+    fd, tmp_name = tempfile.mkstemp(suffix=suffix)
+    os.close(fd)
+    tmp_path = Path(tmp_name)
+    try:
+        tmp_path.write_bytes(data)
+        record = process_file(tmp_path, mip)
+    finally:
+        try:
+            tmp_path.unlink()
+        except OSError:
+            pass
+
+    return {**record, "source_file": Path(filename).name}
+
 
 
 def preprocess_document(path: str | Path, out_dir: str | Path, mip=None) -> dict:

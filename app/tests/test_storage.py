@@ -321,7 +321,7 @@ class TestUploadRoute:
         assert body["blob"]["name"] == "20260101-000000/ccc-test.hwp"
 
     def test_blob_upload_exception_returns_502(self, storage_env):
-        """When blob upload raises, returns 502 with error detail."""
+        """When blob upload raises, returns 502 with a generic error (no exception leak)."""
         with patch(
             "src.storage.routes.upload_blob",
             side_effect=RuntimeError("connection timeout"),
@@ -334,7 +334,11 @@ class TestUploadRoute:
             )
 
         assert resp.status_code == 502
-        assert "connection timeout" in resp.json()["detail"]
+        body = resp.json()
+        assert body["error"] == "Failed to upload file to Blob Storage."
+        # Exception details must not be exposed to the client (CodeQL).
+        assert "connection timeout" not in resp.text
+        assert "detail" not in body
 
     def test_drm_exception_returns_502_with_blob_info(self, storage_env):
         """When DRM decrypt raises, returns 502 but still includes blob metadata."""
@@ -363,5 +367,7 @@ class TestUploadRoute:
         assert resp.status_code == 502
         body = resp.json()
         assert body["drm"]["status"] == "error"
-        assert "network error" in body["drm"]["detail"]
+        assert body["drm"]["detail"] == "DRM decryption request failed."
+        # Exception details must not be exposed to the client (CodeQL).
+        assert "network error" not in resp.text
         assert body["blob"]["name"] == "20260101-000000/ddd-test.hwp"
