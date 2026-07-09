@@ -73,15 +73,16 @@ require_value() {
 print_health_diagnostics() {
   local resource_group="$1"
   local container_app="$2"
+  local subscription_id="$3"
 
   cat >&2 <<EOF
 Health validation failed for Container App '${container_app}'.
 Troubleshooting commands:
-  az containerapp show --name "${container_app}" --resource-group "${resource_group}" -o yaml
-  az containerapp revision list --name "${container_app}" --resource-group "${resource_group}" -o table
-  az containerapp logs show --name "${container_app}" --resource-group "${resource_group}" --type system --tail 200
-  az containerapp logs show --name "${container_app}" --resource-group "${resource_group}" --type console --tail 200
-  az monitor activity-log list --resource-group "${resource_group}" --offset 1h --max-events 50 -o table
+  az containerapp show --name "${container_app}" --resource-group "${resource_group}" --subscription "${subscription_id}" -o yaml
+  az containerapp revision list --name "${container_app}" --resource-group "${resource_group}" --subscription "${subscription_id}" -o table
+  az containerapp logs show --name "${container_app}" --resource-group "${resource_group}" --subscription "${subscription_id}" --type system --tail 200
+  az containerapp logs show --name "${container_app}" --resource-group "${resource_group}" --subscription "${subscription_id}" --type console --tail 200
+  az monitor activity-log list --resource-group "${resource_group}" --subscription "${subscription_id}" --offset 1h --max-events 50 -o table
 EOF
 }
 
@@ -163,6 +164,13 @@ if [[ -n "${SUBSCRIPTION_ID:-}" ]]; then
   az account set --subscription "$SUBSCRIPTION_ID"
 fi
 
+if ! AZ_SUBSCRIPTION_ID="$(az account show --query id -o tsv 2>/dev/null)"; then
+  echo "Error: Azure CLI login context is unavailable. Run 'az login' in this shell user context." >&2
+  exit 1
+fi
+AZ_SUBSCRIPTION_NAME="$(az account show --query name -o tsv)"
+AZ_SCOPE_ARGS=(--subscription "$AZ_SUBSCRIPTION_ID")
+
 require_value "resource group name" "$RESOURCE_GROUP_NAME"
 require_value "container app name" "$CONTAINER_APP_NAME"
 require_value "container registry name" "$CONTAINER_REGISTRY_NAME"
@@ -170,10 +178,24 @@ require_value "container image name" "$CONTAINER_IMAGE_NAME"
 require_value "managed identity id" "$MANAGED_IDENTITY_ID"
 require_value "build context" "$BUILD_CONTEXT"
 
+if [[ "$CONTAINER_REGISTRY_NAME" =~ [[:space:]] ]]; then
+  echo "Error: container registry name contains whitespace: '$CONTAINER_REGISTRY_NAME'" >&2
+  exit 1
+fi
+
+if ! az acr show --name "$CONTAINER_REGISTRY_NAME" "${AZ_SCOPE_ARGS[@]}" --query id -o tsv >/dev/null 2>&1; then
+  echo "Error: ACR '$CONTAINER_REGISTRY_NAME' was not found in resolved subscription '$AZ_SUBSCRIPTION_ID'." >&2
+  echo "Hint: root/sudo sessions often use a different Azure CLI context. Verify with:" >&2
+  echo "  az account show -o table" >&2
+  echo "  az acr show -n \"$CONTAINER_REGISTRY_NAME\" --subscription \"$AZ_SUBSCRIPTION_ID\" -o table" >&2
+  exit 1
+fi
+
 PRE_UPDATE_READY_REVISION="$(
   az containerapp show \
     --name "$CONTAINER_APP_NAME" \
     --resource-group "$RESOURCE_GROUP_NAME" \
+    "${AZ_SCOPE_ARGS[@]}" \
     --query "properties.latestReadyRevisionName" \
     -o tsv
 )"
@@ -192,6 +214,7 @@ echo "Container app: $CONTAINER_APP_NAME"
 echo "Registry: $CONTAINER_REGISTRY_SERVER"
 echo "Image: $FULL_CONTAINER_IMAGE"
 echo "Managed identity: $MANAGED_IDENTITY_ID"
+echo "Azure subscription: $AZ_SUBSCRIPTION_NAME ($AZ_SUBSCRIPTION_ID)"
 echo "Build context: $BUILD_CONTEXT"
 echo "Skip build: $SKIP_BUILD"
 if [[ -n "$AZURE_STORAGE_ACCOUNT_URL" ]]; then
@@ -203,6 +226,7 @@ if [[ "$SKIP_BUILD" != "true" ]]; then
   echo "Building and pushing image to ACR (tag: latest)..."
   az acr build \
     --registry "$CONTAINER_REGISTRY_NAME" \
+    "${AZ_SCOPE_ARGS[@]}" \
     --image "$ACR_IMAGE" \
     "$BUILD_CONTEXT" \
     --only-show-errors >/dev/null
@@ -213,6 +237,7 @@ fi
 az containerapp registry set \
   --name "$CONTAINER_APP_NAME" \
   --resource-group "$RESOURCE_GROUP_NAME" \
+  "${AZ_SCOPE_ARGS[@]}" \
   --server "$CONTAINER_REGISTRY_SERVER" \
   --identity "$MANAGED_IDENTITY_ID" \
   --only-show-errors >/dev/null
@@ -220,6 +245,7 @@ az containerapp registry set \
 UPDATE_ARGS=(
   --name "$CONTAINER_APP_NAME"
   --resource-group "$RESOURCE_GROUP_NAME"
+  "${AZ_SCOPE_ARGS[@]}"
   --image "$FULL_CONTAINER_IMAGE"
 )
 
@@ -239,6 +265,7 @@ APP_URL="$(
   az containerapp show \
     --name "$CONTAINER_APP_NAME" \
     --resource-group "$RESOURCE_GROUP_NAME" \
+    "${AZ_SCOPE_ARGS[@]}" \
     --query "properties.configuration.ingress.fqdn" \
     -o tsv
 )"
@@ -268,6 +295,7 @@ else
       az containerapp show \
         --name "$CONTAINER_APP_NAME" \
         --resource-group "$RESOURCE_GROUP_NAME" \
+        "${AZ_SCOPE_ARGS[@]}" \
         --query "properties.runningStatus" \
         -o tsv
     )"
@@ -275,6 +303,7 @@ else
       az containerapp show \
         --name "$CONTAINER_APP_NAME" \
         --resource-group "$RESOURCE_GROUP_NAME" \
+        "${AZ_SCOPE_ARGS[@]}" \
         --query "properties.provisioningState" \
         -o tsv
     )"
@@ -282,6 +311,7 @@ else
       az containerapp show \
         --name "$CONTAINER_APP_NAME" \
         --resource-group "$RESOURCE_GROUP_NAME" \
+        "${AZ_SCOPE_ARGS[@]}" \
         --query "properties.latestReadyRevisionName" \
         -o tsv
     )"
@@ -302,7 +332,7 @@ if [[ "$HEALTH_CHECK_PASSED" != "true" ]]; then
   if [[ -n "${READY_REVISION:-}" ]]; then
     echo "Current ready revision: ${READY_REVISION}" >&2
   fi
-  print_health_diagnostics "$RESOURCE_GROUP_NAME" "$CONTAINER_APP_NAME"
+  print_health_diagnostics "$RESOURCE_GROUP_NAME" "$CONTAINER_APP_NAME" "$AZ_SUBSCRIPTION_ID"
   exit 1
 fi
 
