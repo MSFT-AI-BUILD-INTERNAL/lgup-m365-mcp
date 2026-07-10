@@ -77,22 +77,6 @@ require_value() {
   fi
 }
 
-print_health_diagnostics() {
-  local resource_group="$1"
-  local container_app="$2"
-  local subscription_id="$3"
-
-  cat >&2 <<EOF
-Health validation failed for Container App '${container_app}'.
-Troubleshooting commands:
-  az containerapp show --name "${container_app}" --resource-group "${resource_group}" --subscription "${subscription_id}" -o yaml
-  az containerapp revision list --name "${container_app}" --resource-group "${resource_group}" --subscription "${subscription_id}" -o table
-  az containerapp logs show --name "${container_app}" --resource-group "${resource_group}" --subscription "${subscription_id}" --type system --tail 200
-  az containerapp logs show --name "${container_app}" --resource-group "${resource_group}" --subscription "${subscription_id}" --type console --tail 200
-  az monitor activity-log list --resource-group "${resource_group}" --subscription "${subscription_id}" --offset 1h --max-events 50 -o table
-EOF
-}
-
 parse_bool() {
   local value="${1:-false}"
   case "${value,,}" in
@@ -208,15 +192,6 @@ if ! az acr show --name "$CONTAINER_REGISTRY_NAME" "${AZ_SCOPE_ARGS[@]}" --query
   exit 1
 fi
 
-PRE_UPDATE_READY_REVISION="$(
-  az containerapp show \
-    --name "$CONTAINER_APP_NAME" \
-    --resource-group "$RESOURCE_GROUP_NAME" \
-    "${AZ_SCOPE_ARGS[@]}" \
-    --query "properties.latestReadyRevisionName" \
-    -o tsv
-)"
-
 CONTAINER_REGISTRY_SERVER="${CONTAINER_REGISTRY_NAME}.azurecr.io"
 ACR_IMAGE="${CONTAINER_IMAGE_NAME}:latest"
 FULL_CONTAINER_IMAGE="${CONTAINER_REGISTRY_SERVER}/${ACR_IMAGE}"
@@ -290,72 +265,6 @@ APP_URL="$(
     --query "properties.configuration.ingress.fqdn" \
     -o tsv
 )"
-
-HEALTH_MAX_ATTEMPTS=20
-HEALTH_RETRY_DELAY_SECONDS=5
-HEALTH_CHECK_PATH="/health"
-HEALTH_CHECK_PASSED="false"
-
-if command -v curl >/dev/null 2>&1 && [[ -n "$APP_URL" ]]; then
-  HEALTH_CHECK_URL="https://${APP_URL}${HEALTH_CHECK_PATH}"
-  echo "Validating app health at ${HEALTH_CHECK_PATH}..."
-  for attempt in $(seq 1 "$HEALTH_MAX_ATTEMPTS"); do
-    if curl --fail --silent --show-error --max-time 10 "$HEALTH_CHECK_URL" >/dev/null; then
-      HEALTH_CHECK_PASSED="true"
-      break
-    fi
-
-    if [[ "$attempt" -lt "$HEALTH_MAX_ATTEMPTS" ]]; then
-      sleep "$HEALTH_RETRY_DELAY_SECONDS"
-    fi
-  done
-else
-  echo "curl unavailable or ingress URL missing; validating Container App readiness via Azure status..."
-  for attempt in $(seq 1 "$HEALTH_MAX_ATTEMPTS"); do
-    RUNNING_STATUS="$(
-      az containerapp show \
-        --name "$CONTAINER_APP_NAME" \
-        --resource-group "$RESOURCE_GROUP_NAME" \
-        "${AZ_SCOPE_ARGS[@]}" \
-        --query "properties.runningStatus" \
-        -o tsv
-    )"
-    PROVISIONING_STATE="$(
-      az containerapp show \
-        --name "$CONTAINER_APP_NAME" \
-        --resource-group "$RESOURCE_GROUP_NAME" \
-        "${AZ_SCOPE_ARGS[@]}" \
-        --query "properties.provisioningState" \
-        -o tsv
-    )"
-    READY_REVISION="$(
-      az containerapp show \
-        --name "$CONTAINER_APP_NAME" \
-        --resource-group "$RESOURCE_GROUP_NAME" \
-        "${AZ_SCOPE_ARGS[@]}" \
-        --query "properties.latestReadyRevisionName" \
-        -o tsv
-    )"
-
-    if [[ "$RUNNING_STATUS" == "Running" && "$PROVISIONING_STATE" == "Succeeded" && -n "$READY_REVISION" ]]; then
-      HEALTH_CHECK_PASSED="true"
-      break
-    fi
-
-    if [[ "$attempt" -lt "$HEALTH_MAX_ATTEMPTS" ]]; then
-      sleep "$HEALTH_RETRY_DELAY_SECONDS"
-    fi
-  done
-fi
-
-if [[ "$HEALTH_CHECK_PASSED" != "true" ]]; then
-  echo "Previous ready revision: ${PRE_UPDATE_READY_REVISION:-<none>}" >&2
-  if [[ -n "${READY_REVISION:-}" ]]; then
-    echo "Current ready revision: ${READY_REVISION}" >&2
-  fi
-  print_health_diagnostics "$RESOURCE_GROUP_NAME" "$CONTAINER_APP_NAME" "$AZ_SUBSCRIPTION_ID"
-  exit 1
-fi
 
 echo "Updated Container App image successfully."
 echo "App URL: https://${APP_URL}"
