@@ -167,6 +167,17 @@ done
 
 require_command az
 
+# Normalize managed identity: accept "system", a full resource ID (/subscriptions/...),
+# or a bare GUID (object/principal ID) which is mapped to "system".
+if [[ "$MANAGED_IDENTITY_ID" == "system" ]]; then
+  :
+elif [[ "$MANAGED_IDENTITY_ID" == /* ]]; then
+  :
+else
+  echo "Note: '${MANAGED_IDENTITY_ID}' is not a resource ID; using system-assigned managed identity for ACR pull." >&2
+  MANAGED_IDENTITY_ID="system"
+fi
+
 if [[ -n "${SUBSCRIPTION_ID:-}" ]]; then
   az account set --subscription "$SUBSCRIPTION_ID"
 fi
