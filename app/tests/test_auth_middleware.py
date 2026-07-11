@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 
 from starlette.requests import Request
@@ -148,3 +149,36 @@ def test_middleware_stores_required_identity_fields():
     assert identity["name"] == "Copilot User"
     assert identity["unique_name"] == "copilot.user@contoso.com"
     assert identity["appid"] == "33dd33dd-33dd-33dd-33dd-33dd33dd33dd"
+
+
+def test_auth_failure_logs_include_claim_snapshot(caplog):
+    tenant_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    client_id = "11111111-2222-3333-4444-555555555555"
+    private_key, jwks = build_signing_material()
+    kid = jwks["keys"][0]["kid"]
+    claims = {
+        "aud": client_id,
+        "iss": f"https://sts.windows.net/{tenant_id}/",
+        "exp": int(time.time()) + 600,
+        "nbf": int(time.time()) - 10,
+        "scp": "User.Read",
+        "name": "Upload User",
+        "unique_name": "upload.user@contoso.com",
+        "appid": "44ee44ee-44ee-44ee-44ee-44ee44ee44ee",
+        "oid": "object-1",
+    }
+    with local_jwks_server(jwks) as jwks_uri:
+        with temporary_env(
+            AUTH_TENANT_ID=tenant_id,
+            AUTH_CLIENT_ID=client_id,
+            AUTH_JWKS_URI=jwks_uri,
+        ):
+            token = sign_token(private_key, claims, kid)
+            request = _request("POST", "/upload", f"Bearer {token}")
+            with caplog.at_level(logging.WARNING, logger="lgup_mcp.auth"):
+                failure = authenticate_request(request)
+    assert failure is not None
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("Authentication failed" in message for message in messages)
+    assert any("upload.user@contoso.com" in message for message in messages)
+    assert any("44ee44ee-44ee-44ee-44ee-44ee44ee44ee" in message for message in messages)
