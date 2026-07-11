@@ -45,6 +45,17 @@ _mcp = build_mcp()
 _mcp_app = _mcp.streamable_http_app()
 
 
+def _configure_logging() -> None:
+    root = logging.getLogger()
+    if not root.handlers:
+        logging.basicConfig(level=logging.INFO)
+    for name in ("lgup_mcp", "lgup_mcp.auth", "lgup_mcp.storage", "lgup_mcp.drm"):
+        logging.getLogger(name).setLevel(logging.INFO)
+
+
+_configure_logging()
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     # Run the MCP session manager for the mounted Streamable HTTP app.

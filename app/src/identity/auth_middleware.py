@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 
 from fastapi import Request
 from fastapi.responses import JSONResponse, Response
@@ -14,6 +15,24 @@ from .caller_identity import resolve_caller_identity
 from .entra_token_validator import TokenValidationError, validate_entra_access_token
 
 logger = logging.getLogger("lgup_mcp.auth")
+
+
+def _ensure_auth_logger_handler() -> None:
+    # Uvicorn config may not route non-uvicorn loggers to console in some
+    # runtime configurations. Add a fallback stream handler so [AUTH] logs are
+    # always emitted to container stdout/stderr.
+    if logger.handlers:
+        return
+    handler = logging.StreamHandler(stream=sys.stdout)
+    handler.setFormatter(
+        logging.Formatter("%(levelname)s:%(name)s:%(message)s")
+    )
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+
+
+_ensure_auth_logger_handler()
 
 _PROTECTED_EXACT_PATHS = {"/drm/decrypt", "/upload"}
 _PROTECTED_PREFIX_PATHS = ("/onedrive",)
