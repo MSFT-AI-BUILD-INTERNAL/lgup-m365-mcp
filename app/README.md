@@ -14,6 +14,8 @@ src/
     access_token.py          # AccessToken 값객체 (JWT 클레임/스코프)
     caller_identity.py       # ACL: EasyAuth 헤더/Bearer → 도메인 신원
     scope_guard.py           # 스코프 정책 (401/403)
+    entra_token_validator.py # Entra JWKS 기반 JWT 서명/issuer/audience 검증
+    auth_middleware.py       # 보호 엔드포인트 공통 인증 미들웨어
   mcp_server/                # MCP 컨텍스트
     server.py                # FastMCP + 도구(test_lgup, get_current_user)
   drm/                       # DRM 복호화 컨텍스트
@@ -66,6 +68,9 @@ uv pip install -r requirements.txt
 # 2) 환경변수 (Entra)
 export AUTH_TENANT_ID='<tenant-guid>'
 export AUTH_CLIENT_ID='<api-app-client-id>'
+# (선택) JWT 키셋 URL 오버라이드. 기본은 Entra discovery 키셋.
+# 테스트/특수 게이트웨이 시나리오에서만 사용.
+export AUTH_JWKS_URI='<jwks-uri>'
 
 # (테스트 전용) 브라우저 테스트 UI 활성화 — 프로덕션에서는 설정하지 말 것
 export ENABLE_TEST_UI=1
@@ -148,3 +153,4 @@ pytest tests/test_entra_login_e2e.py # 3) Entra 로그인 e2e (Playwright)
 - 시크릿(DRM secretKey 등)은 **환경변수로만** 사용되며 브라우저로 전달되지 않습니다.
 - HMAC 서명·외부 API 호출은 서버(`/drm/decrypt`)에서 수행합니다.
 - MSAL은 외부 CDN 대신 **로컬 정적 파일**로 제공합니다.
+- 앱 미들웨어는 Entra JWT를 검증하며, Copilot Studio 연동에서 전달되는 `raw_jwt` 형태(`{header}.{payload}.[Signature]`)도 클레임 검증(issuer/aud/exp/scope)으로 처리합니다.
