@@ -27,12 +27,11 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from .drm.routes import router as drm_router
+from .identity.auth_middleware import authenticate_request
 from .identity.caller_identity import resolve_caller_identity
-from .identity.scope_guard import scope_failure_response
 from .mcp_server.server import build_mcp
 from .oauth.metadata_routes import router as oauth_router
 from .shared.server_info import (
-    ALLOW_ANONYMOUS_MCP,
     ENABLE_TEST_UI,
     PORT,
     SERVER_NAME,
@@ -44,6 +43,17 @@ logger = logging.getLogger("lgup_mcp")
 
 _mcp = build_mcp()
 _mcp_app = _mcp.streamable_http_app()
+
+
+def _configure_logging() -> None:
+    root = logging.getLogger()
+    if not root.handlers:
+        logging.basicConfig(level=logging.INFO)
+    for name in ("lgup_mcp", "lgup_mcp.auth", "lgup_mcp.storage", "lgup_mcp.drm"):
+        logging.getLogger(name).setLevel(logging.INFO)
+
+
+_configure_logging()
 
 
 @asynccontextmanager
@@ -58,19 +68,21 @@ app = FastAPI(title=SERVER_NAME, version=SERVER_VERSION, lifespan=lifespan)
 
 @app.middleware("http")
 async def enforce_mcp_scope(request: Request, call_next):
-    # Defence-in-depth scope check on the MCP endpoint (APIM validates the JWT).
+    failure = authenticate_request(request)
+    if failure is not None:
+        return failure
+
     if request.url.path == "/mcp" and request.method == "POST":
-        # When anonymous MCP is enabled (e.g. Copilot Studio "no authentication"),
-        # skip the app-level scope check. APIM must also drop validate-jwt on /mcp.
-        if not ALLOW_ANONYMOUS_MCP:
-            failure = scope_failure_response(request.headers.get("authorization"))
-            if failure is not None:
-                return failure
-        user = resolve_caller_identity(request.headers)
+        user = getattr(request.state, "caller_identity", None) or resolve_caller_identity(
+            request.headers
+        )
         logger.info(
             "[MCP] Incoming request from: %s",
             json.dumps(
                 {
+                    "name": user.get("name"),
+                    "unique_name": user.get("unique_name"),
+                    "appid": user.get("appid"),
                     "displayName": user["displayName"],
                     "userPrincipalName": user["userPrincipalName"],
                     "objectId": user["objectId"],

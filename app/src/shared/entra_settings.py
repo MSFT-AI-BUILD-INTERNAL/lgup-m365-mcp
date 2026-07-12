@@ -20,6 +20,7 @@ class EntraSettings:
     tenant_id: str
     client_id: str
     required_scope: str = REQUIRED_SCOPE
+    jwks_uri_override: str = ""
 
     @property
     def is_configured(self) -> bool:
@@ -54,6 +55,8 @@ class EntraSettings:
 
     @property
     def jwks_uri(self) -> str:
+        if self.jwks_uri_override:
+            return self.jwks_uri_override
         return f"{self.authority}/discovery/v2.0/keys"
 
 
@@ -63,4 +66,5 @@ def load_entra_settings() -> EntraSettings:
         tenant_id=os.environ.get("AUTH_TENANT_ID", ""),
         client_id=os.environ.get("AUTH_CLIENT_ID", ""),
         required_scope=REQUIRED_SCOPE,
+        jwks_uri_override=os.environ.get("AUTH_JWKS_URI", ""),
     )

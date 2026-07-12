@@ -54,6 +54,9 @@ def resolve_caller_identity(headers: Mapping[str, str]) -> dict[str, Any]:
 
     return {
         "authenticated": authenticated,
+        "name": claims.get("name") or None,
+        "unique_name": claims.get("unique_name") or None,
+        "appid": claims.get("appid") or None,
         "displayName": display_name or None,
         "userPrincipalName": (
             claims.get("preferred_username") or claims.get("upn") or principal_name
