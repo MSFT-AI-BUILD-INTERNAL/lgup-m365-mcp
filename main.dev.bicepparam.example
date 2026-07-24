@@ -25,7 +25,9 @@ param integrations = {
   drmApiBaseUrl: 'https://drm.example.com'
 }
 
-param containerImage = 'lgmcpdevacreubidyfnm7le4.azurecr.io/lgup-mcp-server:1.1.0'
+// The lgmcpdevacreubidyfnm7le4 registry was deleted during the rg-ms-azure-ax-prd
+// migration; point at your current ACR (live dev uses lgmcpaxprdacr987d03).
+param containerImage = 'lgmcpaxprdacr987d03.azurecr.io/lgup-mcp-server:latest'
 param containerPort = 8080
 param minReplicas = 1
 param maxReplicas = 2
